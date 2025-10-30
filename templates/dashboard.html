@@ -1,0 +1,3064 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оборона Від Зомбі</title>
+    <!-- Завантажуємо Tailwind CSS для стилізації -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Зомбі-апокаліпсис палітра
+                        'military-dark': '#1a1a1a',      
+                        'military-green': '#4a553a',    
+                        'military-metal': '#8d9491',    
+                        'military-text': '#dee2e6',     
+                        'resource-yellow': '#ffc107',   // Ресурси 
+                        'integrity-red': '#dc3545',     // Цілісність бази
+                        'ui-accent': '#0d6efd',         // Синій акцент 
+                        'boss-purple': '#6f42c1',       // Колір Боса
+                        'zombie-skin': '#556B2F',       // Колір зомбі
+                        'zombie-slow': '#4990e8',       // Колір уповільненого зомбі
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Стиль для фону (темний, текстурований) */
+        body {
+            background-color: #1a1a1a;
+            background-image: 
+                linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.9)), 
+                url('https://www.transparenttextures.com/patterns/dark-metal.png'); 
+            background-attachment: fixed;
+        }
+        
+        /* Головний контейнер (вигляд металевої панелі управління) */
+        #game-container {
+            background-color: #212529; 
+            border: 2px solid #495057;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7), inset 0 0 15px rgba(0, 0, 0, 0.6); 
+            border-radius: 0.5rem; 
+        }
+
+        /* Стилі для 3D кнопок дій */
+        .action-button {
+            transition: all 0.1s ease-out;
+            border-radius: 0.5rem;
+            box-shadow: 0 5px 0 0 var(--depth-color, #212529), 0 8px 15px rgba(0, 0, 0, 0.5); 
+            border-bottom: 4px solid var(--depth-color, #212529); 
+        }
+        .action-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 0 0 var(--depth-color, #212529), 0 10px 20px rgba(0, 0, 0, 0.6);
+            filter: brightness(1.1);
+        }
+        .action-button:active {
+            transform: translateY(4px); 
+            box-shadow: 0 1px 0 0 var(--depth-color, #212529), 0 2px 5px rgba(0, 0, 0, 0.4); 
+            border-bottom-width: 1px;
+        }
+        /* Визначення кольору глибини для кнопок */
+        .btn-green { --depth-color: #313824; }
+        .btn-red { --depth-color: #a02834; }
+        .btn-yellow { --depth-color: #b38b05; }
+        .btn-blue { --depth-color: #0c4a92; }
+        .btn-dark { --depth-color: #0f0f0f; }
+
+        /* Стилі для ігрового полотна (асфальт/бетон) */
+        #gameCanvas {
+            background-color: #5a6670; 
+            border: 2px solid #1a1a1a;
+            border-radius: 4px;
+            touch-action: none; 
+            /* Забезпечуємо адаптивність */
+            width: 100%; 
+            height: auto; 
+            max-width: 1000px;
+        }
+
+        /* Стиль для канвасів іконок веж */
+        .tower-icon-canvas {
+            background-color: #4a5568; /* темно-сірий фон, щоб вежі виділялись */
+            border-radius: 3px;
+            border: 1px solid #2d3748;
+            image-rendering: pixelated; /* для чітких ліній */
+        }
+    </style>
+</head>
+<body class="font-sans flex items-center justify-center min-h-screen p-2 md:p-4">
+
+    <div id="game-container" class="w-full max-w-5xl p-4 md:p-6 rounded-lg text-military-text">
+        
+        <!-- Секція статистики (ПЕРЕМІЩЕНА ВГОРУ ДЛЯ МОБІЛЬНОГО ПЕРЕГЛЯДУ) -->
+        <section id="stats-section" class="bg-military-dark/70 p-3 rounded-md mb-4 border border-military-metal/20 grid grid-cols-3 gap-3">
+            <div class="text-center p-2 bg-military-dark rounded shadow-inner">
+                <p class="text-sm font-light text-military-text/70">💰 Ресурси</p>
+                <p id="gold" class="text-2xl md:text-3xl font-bold text-resource-yellow">150</p>
+            </div>
+            <div class="text-center p-2 bg-military-dark rounded shadow-inner">
+                <p class="text-sm font-light text-military-text/70">❤️ Цілісність Бази</p>
+                <p id="lives" class="text-2xl md:text-3xl font-bold text-integrity-red">10</p>
+            </div>
+            <div class="text-center p-2 bg-military-dark rounded shadow-inner">
+                <p class="text-sm font-light text-military-text/70">🌊 Хвиля</p>
+                <p id="wave" class="text-2xl md:text-3xl font-bold text-ui-accent">0</p>
+            </div>
+        </section>
+
+        <!-- Ігрове Полотно -->
+        <div class="flex justify-center mb-4 relative">
+            <canvas id="gameCanvas" width="1200" height="600"></canvas>
+        </div>
+        
+        <!-- Секція дій та покращень -->
+        <section id="actions-section" class="mb-4">
+            <h2 class="text-xl font-semibold mb-3 text-resource-yellow">ПАНЕЛЬ УПРАВЛІННЯ</h2>
+            
+            <!-- Кнопки розміщення -->
+            <div id="placement-buttons" class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3 mb-4">
+                
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <!-- Секція Покращення -->
+                <div id="upgrade-section" class="md:col-span-2 bg-military-dark/70 p-3 rounded-md border border-military-metal/20 text-center flex flex-col items-center justify-center">
+                    <p id="tower-info" class="text-xs text-military-text/80 mb-2">Натисніть на турель для вибору.</p>
+                    <div class="w-full grid grid-cols-2 gap-2">
+                        <button id="upgrade-tower-btn" disabled class="action-button bg-gray-600/50 text-white py-2 px-4 rounded-md font-semibold w-full text-sm">
+                            <span id="upgrade-button-text">Покращити</span>
+                            <span id="upgrade-cost-display" class="block text-xs text-resource-yellow/70 mt-1">Ціна: -</span>
+                        </button>
+                        <button id="sell-tower-btn" disabled class="action-button bg-gray-600/50 text-white py-2 px-4 rounded-md font-semibold w-full text-sm">
+                            <span id="sell-button-text">Продати</span>
+                            <span id="sell-value-display" class="block text-xs text-green-400/70 mt-1">Виручка: -</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Запустити Наступну Хвилю -->
+                <button id="start-wave-btn" class="action-button bg-integrity-red btn-red text-white py-3 px-4 rounded-md hover:bg-integrity-red/80 font-bold flex flex-col items-center justify-center">
+                    <span id="wave-button-text" class="text-md">Запустити Хвилю 1</span>
+                    <span class="text-sm font-normal text-military-text/90 mt-1">До бою!</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Секція журналу подій -->
+        <section id="log-section">
+            <h2 class="text-lg font-semibold mb-2 text-resource-yellow">Журнал Бойових Дій</h2>
+            <div id="game-log" class="h-20 overflow-y-auto bg-black/50 p-2 rounded-md text-xs leading-relaxed border border-white/10 font-mono">
+                <!-- Повідомлення з'являтимуться тут -->
+            </div>
+        </section>
+
+        <!-- Модальне вікно -->
+        <div id="modal" class="fixed inset-0 bg-black bg-opacity-85 hidden items-center justify-center p-4 z-50">
+            <div class="bg-military-dark p-6 rounded-md border-2 border-military-metal shadow-2xl max-w-sm w-full text-center">
+                <h3 id="modal-title" class="text-2xl font-bold text-resource-yellow mb-4"></h3>
+                <p id="modal-message" class="text-lg text-military-text mb-6"></p>
+                <button id="modal-close-btn" class="action-button bg-integrity-red btn-red text-white py-2 px-6 rounded-md font-semibold">Зрозуміло</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Ігрові константи
+        const CANVAS_WIDTH = 1200;
+        const CANVAS_HEIGHT = 600;
+        const TILE_SIZE = 60;
+        const MAX_LIVES = 10;
+        const BOSS_WAVE_INTERVAL = 10; 
+        const NECROMANCER_WAVE_INTERVAL = 15;
+        const MAX_TOWER_LEVEL = 20;
+        const UPGRADE_COST_BASE = 50;
+        const SELL_REFUND_PERCENTAGE = 0.75;
+
+        // Визначення типів турелей
+        const TOWER_DEFINITIONS = {
+            // Damaging Towers (Sorted by Cost)
+            SPIKE_TRAP: { name: 'Пастка', cost: 75, damage: 15, range: 0, cooldown: 120, color: '#8d9491', icon: '🚧', slowDuration: 90, slowFactor: 0.6, upgradeDamage: 5, upgradeCooldown: 10 },
+            GATLING: { name: 'Кулемет', cost: 120, damage: 6, range: 120, cooldown: 15, color: '#343a40', icon: '⚙️', upgradeDamage: 1.5, upgradeCooldown: 0.5 },
+            GRENADE_LAUNCHER: { name: 'Гранатомет', cost: 150, damage: 60, range: 160, cooldown: 150, color: '#a16207', icon: '💥', upgradeDamage: 15, upgradeCooldown: 10, aoeRadius: 70 },
+            FLAMETHROWER: { name: 'Вогнемет', cost: 160, damage: 2, range: 80, cooldown: 5, color: '#fd7e14', icon: '🔥', upgradeDamage: 0.5, dotDuration: 120 },
+            MORTAR: { name: 'Мортира', cost: 200, damage: 100, range: 400, cooldown: 240, color: '#495057', icon: '🎯', upgradeDamage: 25, upgradeCooldown: 15, aoeRadius: 60, minRange: 100 },
+            ROCKET_LAUNCHER: { name: 'Ракетниця', cost: 220, damage: 80, range: 250, cooldown: 180, color: '#6f42c1', icon: '🚀', upgradeDamage: 20, upgradeCooldown: 10, aoeRadius: 50 },
+            GAUBITSIA: { name: 'Гаубиця', cost: 250, damage: 27, range: 150, cooldown: 40, color: '#6c757d', icon: '💣', upgradeDamage: 7, upgradeCooldown: 2 },
+            TESLA: { name: 'Тесла', cost: 350, damage: 8, range: 100, cooldown: 10, color: '#0d6efd', icon: '⚡', chainTargets: 2, upgradeDamage: 2, upgradeCooldown: 0 },
+            SNIPER: { name: 'Снайпер', cost: 400, damage: 150, range: 300, cooldown: 120, color: '#212529', icon: '🔭', upgradeDamage: 40, upgradeCooldown: 10 },
+            RAILGUN: { name: 'Рельсотрон', cost: 600, damage: 300, range: 350, cooldown: 300, color: '#0dcaf0', icon: '➡️', upgradeDamage: 75, upgradeCooldown: 20 },
+            POISON_SPRAYER: { name: 'Розпилювач', cost: 700, damage: 0.2, range: 130, cooldown: 5, color: '#22c55e', icon: '☠️', poisonDuration: 180, upgradeDamage: 0.1, upgradeCooldown: 0 },
+            BLADE_VORTEX: { name: 'Вихор', cost: 800, damage: 10, range: 0, cooldown: 0, color: '#7e22ce', icon: '🔄', orbitalRadius: 60, orbitalSpeed: 0.05, upgradeDamage: 3, upgradeRadius: 5 },
+            ROBOT_FACTORY: { name: 'Фабрика', cost: 4500, damage: 0, range: 0, cooldown: 0, color: '#adb5bd', icon: '🏭', initialDrones: 1, upgradeDrones: 1, droneDamage: 6, droneRange: 120, droneCooldown: 60, upgradeDroneRange: 10 },
+            CRYO_GENERATOR: { name: 'Кріо', cost: 20000, damage: 250, range: 150, cooldown: 0, color: '#a5f3fc', icon: '❄️', slowFactor: 0.6, upgradeRange: 10, upgradeDamage: 70 },
+            ORBITAL_STRIKE: { name: 'Орбіта', cost: 1500000, damage: 4000, range: 9999, cooldown: 600, color: '#f59e0b', icon: '🛰️', upgradeDamage: 1000, upgradeCooldown: 30, aoeRadius: 60 },
+            SINGULARITY: { name: 'Сингуляр', cost: 2000000, damage: 5000, range: 250, cooldown: 400, color: '#4c0519', icon: '🌌', upgradeDamage: 1500, upgradeCooldown: 20, aoeRadius: 100 },
+            
+            // Support Towers
+            SLOW: { name: 'Уповільнювач', cost: 100, damage: 5, range: 150, cooldown: 60, color: '#67e8f9', icon: '🧊', slowDuration: 180, slowFactor: 0.5, upgradeDuration: 15, upgradeCooldown: 3 },
+            EMP: { name: 'ЕМІ', cost: 200, damage: 1, range: 120, cooldown: 200, color: '#d63384', icon: '🌀', upgradeCooldown: 10, stunDuration: 90, aoeRadius: 60 },
+            SHRINK_RAY: { name: 'Зменшувач', cost: 280, damage: 0, range: 100, cooldown: 0, color: '#10b981', icon: '🔬', shrinkFactor: 0.75, upgradeRange: 10, upgradeShrinkFactor: 0.02 },
+            SUPPORT: { name: 'Підсилювач', cost: 300, damage: 0, range: 100, cooldown: 0, color: '#20c997', icon: '➕', damageBoost: 1.1, upgradeRange: 10 },
+            VULNERABILITY_BEACON: { name: 'Маяк', cost: 450, damage: 0, range: 130, cooldown: 0, color: '#facc15', icon: '📡', upgradeRange: 15, damageAmplification: 1.2, upgradeAmplification: 0.05 },
+            CHRONO_BOOSTER: { name: 'Прискорювач', cost: 1000, damage: 0, range: 110, cooldown: 0, color: '#3b82f6', icon: '⏩', upgradeRange: 10, cooldownReduction: 0.85, upgradeReduction: 0.02 },
+            HYPNO_TOWER: { name: 'Гіпно-вежа', cost: 1200, damage: 0, range: 150, cooldown: 300, color: '#ec4899', icon: '🧠', upgradeCooldown: 10, upgradeRange: 10 },
+        };
+
+        // Стан гри
+        let gold = 150;
+        let lives = MAX_LIVES;
+        let wave = 0;
+        let isWaveActive = false;
+        let isGameOver = false;
+        let isPlacingTower = false; 
+        let currentTowerTypeToPlace = 'GAUBITSIA';
+        let selectedTower = null;
+        let mousePos = { x: -1, y: -1 };
+
+        // Ігрові об'єкти
+        const enemies = [];
+        const towers = [];
+        const projectiles = [];
+        const drones = [];
+        const convertedZombies = [];
+        const orbitalProjectiles = [];
+        let logMessages = [];
+        const maxLogLength = 5;
+
+        // Посилання на DOM
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const goldEl = document.getElementById('gold');
+        const livesEl = document.getElementById('lives');
+        const waveEl = document.getElementById('wave');
+        const placementButtonsContainer = document.getElementById('placement-buttons');
+        const startWaveBtn = document.getElementById('start-wave-btn');
+        const gameLogEl = document.getElementById('game-log');
+
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+        
+        const waveButtonTextEl = document.getElementById('wave-button-text');
+        
+        const upgradeTowerBtn = document.getElementById('upgrade-tower-btn');
+        const upgradeButtonTextEl = document.getElementById('upgrade-button-text');
+        const upgradeCostDisplayEl = document.getElementById('upgrade-cost-display');
+        const towerInfoEl = document.getElementById('tower-info');
+        const sellTowerBtn = document.getElementById('sell-tower-btn');
+        const sellValueDisplayEl = document.getElementById('sell-value-display');
+
+        // Визначення шляху (координати центру клітинок)
+        const path = [
+            {x: 0, y: 3.5}, {x: 4, y: 3.5}, {x: 4, y: 7.5}, {x: 16, y: 7.5}, {x: 16, y: 1.5}, 
+            {x: 12, y: 1.5}, {x: 12, y: 5.5}, {x: 8, y: 5.5}, {x: 8, y: 1.5}, {x: 10, y: 1.5}
+        ];
+        
+        // --- Управління UI та Журналом ---
+
+        function showModal(title, message, callback) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            modalCloseBtn.onclick = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                if (callback) callback();
+            };
+        }
+
+        function logMessage(message, type = 'info') {
+            const date = new Date().toLocaleTimeString();
+            let colorClass = 'text-military-text';
+            if (type === 'success') colorClass = 'text-green-400';
+            if (type === 'error') colorClass = 'text-integrity-red';
+            if (type === 'warning') colorClass = 'text-resource-yellow';
+            if (type === 'boss') colorClass = 'text-boss-purple font-bold'; 
+            if (type === 'income') colorClass = 'text-green-500';
+
+            const logEntry = `<span class="${colorClass}">[${date}] ${message}</span>`;
+            logMessages.unshift(logEntry);
+
+            if (logMessages.length > maxLogLength) {
+                logMessages.pop();
+            }
+
+            gameLogEl.innerHTML = logMessages.join('<br>');
+            gameLogEl.scrollTop = 0;
+        }
+
+        function updateUI() {
+            goldEl.textContent = gold.toLocaleString();
+            livesEl.textContent = lives.toFixed(0);
+            waveEl.textContent = wave;
+            
+            const nextWave = wave + 1;
+            const isBossWave = (nextWave % BOSS_WAVE_INTERVAL === 0) && (nextWave % NECROMANCER_WAVE_INTERVAL !== 0);
+            const isNecroWave = nextWave % NECROMANCER_WAVE_INTERVAL === 0;
+
+            if (isNecroWave && !isWaveActive) {
+                waveButtonTextEl.textContent = `Запустити Хвилю ${nextWave} (НЕКРОМАНТ!)`;
+            } else if (isBossWave) {
+                waveButtonTextEl.textContent = `Запустити Хвилю ${nextWave} (БОС ЗОМБІ!)`;
+            } else {
+                 waveButtonTextEl.textContent = isWaveActive ? `Хвиля ${wave} в дії...` : `Запустити Хвилю ${nextWave}`;
+            }
+
+            // Оновлення кнопок розміщення
+            Object.keys(TOWER_DEFINITIONS).forEach(type => {
+                const def = TOWER_DEFINITIONS[type];
+                const btn = document.getElementById(`place-${type.toLowerCase()}-btn`);
+                
+                if (btn) {
+                    btn.disabled = gold < def.cost;
+                    btn.classList.toggle('opacity-50', btn.disabled);
+                    
+                    const isSelected = isPlacingTower && currentTowerTypeToPlace === type;
+                    btn.classList.toggle('bg-orange-600', isSelected);
+                    
+                    if (isSelected) {
+                        Object.assign(btn.style, {'--depth-color': '#c2410c'});
+                    } else {
+                        btn.style.cssText = null;
+                    }
+                }
+            });
+
+
+            // Оновлення секції покращення
+            if (selectedTower) {
+                const tower = selectedTower;
+                const nextLevel = tower.level + 1;
+                const currentUpgradeCost = UPGRADE_COST_BASE * tower.level * (tower.totalCost > 500000 ? 100 : 1);
+                const sellValue = Math.floor(tower.totalCost * SELL_REFUND_PERCENTAGE);
+                
+                let fireRate = 'N/A';
+                if (tower.cooldown > 0 && tower.type !== 'SUPPORT' && tower.type !== 'ROBOT_FACTORY') {
+                    fireRate = (60 / (tower.cooldown * tower.cooldownMultiplier)).toFixed(1); 
+                }
+
+                if (tower.type === 'VULNERABILITY_BEACON') {
+                    const ampPercent = ((tower.damageAmplification - 1) * 100).toFixed(0);
+                    towerInfoEl.innerHTML = `Маяк ${tower.name} Рівень ${tower.level}<br>Посилення шкоди: +${ampPercent}% | Дальність: ${tower.range}`;
+                } else if (tower.type === 'ROBOT_FACTORY') {
+                     towerInfoEl.innerHTML = `Фабрика Рівень ${tower.level}<br>Дронів: ${tower.droneCount} | Шкода: ${tower.droneDamage} | Дальність: ${tower.droneRange}`;
+                } else if (tower.type === 'CHRONO_BOOSTER') {
+                    const speedPercent = ((1 / tower.cooldownReduction - 1) * 100).toFixed(0);
+                    towerInfoEl.innerHTML = `Прискорювач ${tower.name} Рівень ${tower.level}<br>Прискорення: +${speedPercent}% | Дальність: ${tower.range}`;
+                } else if (tower.type === 'ALCHEMIST') {
+                    const chancePercent = (tower.instakillChance * 100).toFixed(1);
+                    towerInfoEl.innerHTML = `Алхімік Рівень ${tower.level}<br>Шанс: ${chancePercent}% | Дальність: ${tower.range}`;
+                } else if (tower.type === 'SUPPORT') {
+                    const boostPercent = ((TOWER_DEFINITIONS.SUPPORT.damageBoost + (tower.level - 1) * 0.02) * 100 - 100).toFixed(0);
+                    towerInfoEl.innerHTML = `${tower.name} Рівень ${tower.level}<br>Бонус: +${boostPercent}% шкоди | Дальність: ${tower.range}`;
+                } else if (tower.type === 'SPIKE_TRAP') {
+                     towerInfoEl.innerHTML = `Пастка Рівень ${tower.level}<br>Шкода: ${tower.damage.toFixed(1)} | Перезарядка: ${(tower.cooldown / 60).toFixed(1)} сек.`;
+                } else {
+                    towerInfoEl.innerHTML = `Турель ${tower.name} Рівень ${tower.level}<br>Шкода: ${(tower.damage * tower.damageMultiplier).toFixed(1)} | Дальність: ${tower.range} | Швидкість: ${fireRate}/сек.`;
+                }
+
+                if (tower.level < MAX_TOWER_LEVEL) {
+                    upgradeTowerBtn.disabled = gold < currentUpgradeCost;
+                    upgradeTowerBtn.classList.remove('bg-gray-600/50', 'bg-green-600/50');
+                    upgradeTowerBtn.classList.add(gold >= currentUpgradeCost ? 'bg-green-600' : 'bg-gray-600/50');
+                    upgradeButtonTextEl.textContent = `Покращити до Рівня ${nextLevel}`;
+                    upgradeCostDisplayEl.textContent = `Ціна: ${currentUpgradeCost} Ресурсів`;
+                } else {
+                    upgradeTowerBtn.disabled = true;
+                    upgradeTowerBtn.classList.remove('bg-green-600');
+                    upgradeTowerBtn.classList.add('bg-green-600/50');
+                    upgradeButtonTextEl.textContent = `МАКС. РІВЕНЬ`;
+                    upgradeCostDisplayEl.textContent = `Досягнуто Максимум`;
+                }
+                
+                sellTowerBtn.disabled = false;
+                sellTowerBtn.classList.remove('bg-gray-600/50');
+                sellTowerBtn.classList.add('bg-integrity-red', 'btn-red');
+                sellValueDisplayEl.textContent = `Виручка: ${sellValue}`;
+
+            } else {
+                towerInfoEl.textContent = 'Натисніть на турель для вибору.';
+                upgradeTowerBtn.disabled = true;
+                upgradeTowerBtn.classList.remove('bg-green-600');
+                upgradeTowerBtn.classList.add('bg-gray-600/50');
+                upgradeButtonTextEl.textContent = 'Покращити';
+                upgradeCostDisplayEl.textContent = 'Виберіть ціль';
+
+                sellTowerBtn.disabled = true;
+                sellTowerBtn.classList.remove('bg-integrity-red', 'btn-red');
+                sellTowerBtn.classList.add('bg-gray-600/50');
+                sellValueDisplayEl.textContent = 'Виручка: -';
+            }
+
+            startWaveBtn.disabled = isWaveActive || isGameOver || isPlacingTower; 
+            startWaveBtn.classList.toggle('opacity-50', startWaveBtn.disabled);
+        }
+
+        // --- Класи Ігрових Об'єктів ---
+
+        class Enemy {
+            constructor(waveNumber) {
+                this.x = -TILE_SIZE; 
+                this.y = path[0].y * TILE_SIZE + TILE_SIZE / 2; 
+                this.pathIndex = 0;
+                this.maxHealth = (20 + waveNumber * 5) * 2;
+                this.health = this.maxHealth;
+                this.baseSpeed = 0.5 + waveNumber * 0.05;
+                this.speed = this.baseSpeed;
+                this.size = 15;
+                this.goldValue = 10 + waveNumber * 2;
+                this.damage = 5 + waveNumber * 0.5;
+                this.isBoss = false;
+                this.slowTimer = 0; 
+                this.slowFactor = 1.0; 
+                this.stunTimer = 0;
+                this.isCryoSlowed = false;
+                this.dotTimer = 0;
+                this.dotDamage = 0;
+                this.attackCooldown = 0;
+                this.maxAttackCooldown = 60;
+                this.damageTakenMultiplier = 1.0;
+                this.isShrunk = false;
+                this.isConverted = false;
+                this.shrinkFactor = 1.0;
+                this.isGold = false;
+                this.poisonDamage = 0;
+                this.poisonDuration = 0;
+            }
+            
+            turnToGold() {
+                if (this.isBoss || this.isGold) return; // Failsafe
+                this.health = 1; // Make it untargetable but not "dead"
+                this.isGold = true;
+                this.speed = 0; // Stop moving
+                this.baseSpeed = 0;
+                logMessage(`Зомбі перетворено на золоту статую!`, 'success');
+            }
+
+            draw() {
+                const drawSize = this.size * this.shrinkFactor;
+
+                ctx.save();
+                ctx.font = `${drawSize * 2}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                let fillStyle = this.isConverted ? '#ec4899' : (this.slowTimer > 0 ? '#4990e8' : '#556B2F');
+                if (this.isGold) {
+                    fillStyle = '#ffd700'; // Gold color
+                }
+                ctx.fillStyle = fillStyle; 
+                
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, drawSize, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (this.stunTimer > 0) {
+                    ctx.fillStyle = 'rgba(255, 255, 0, 0.7)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, drawSize * 1.3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                if (this.damageTakenMultiplier > 1.0) {
+                     ctx.strokeStyle = '#facc15';
+                     ctx.lineWidth = 2;
+                     ctx.beginPath();
+                     ctx.arc(this.x, this.y, drawSize + 4, 0, Math.PI * 2);
+                     ctx.stroke();
+                }
+
+                if (this.isGold) {
+                    ctx.fillText('💰', this.x, this.y);
+                } else {
+                    ctx.fillText('🧟', this.x, this.y);
+                }
+
+                ctx.restore();
+                this.drawHealthBar(drawSize);
+
+                if (this.dotTimer > 0) {
+                    ctx.fillStyle = 'rgba(253, 126, 20, 0.8)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y - drawSize, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                if (this.poisonDuration > 0) {
+                    ctx.fillStyle = 'rgba(34, 197, 94, 0.8)'; // green-500
+                    ctx.beginPath();
+                    ctx.arc(this.x + drawSize/2, this.y - drawSize, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            drawHealthBar(drawSize) {
+                if (this.isGold) return; // Не малювати HP для золотих статуй
+                const healthWidth = (drawSize || this.size) * 2;
+                const healthHeight = 4;
+                const healthSource = this.maxHealth;
+                const currentHealthWidth = (this.health / healthSource) * healthWidth;
+                ctx.fillStyle = '#555';
+                ctx.fillRect(this.x - healthWidth/2, this.y - (drawSize || this.size) - 10, healthWidth, healthHeight);
+                ctx.fillStyle = this.isConverted ? '#20c997' : '#dc3545';
+                ctx.fillRect(this.x - healthWidth/2, this.y - (drawSize || this.size) - 10, currentHealthWidth, healthHeight);
+            }
+
+            update() {
+                if (this.isGold) return; // Золоті статуї не рухаються
+                if (this.isConverted) {
+                    return; // Логіка оновлення для навернутих зомбі знаходиться в головному циклі
+                }
+                if (this.stunTimer > 0) {
+                    this.stunTimer--;
+                    return;
+                }
+                if (this.dotTimer > 0) {
+                    this.dotTimer--;
+                    this.health -= this.dotDamage * this.damageTakenMultiplier;
+                }
+
+                if (this.poisonDuration > 0) {
+                    this.poisonDuration--;
+                    this.health -= this.poisonDamage; // damage is pre-calculated
+                } else {
+                    this.poisonDamage = 0; // Reset damage
+                }
+
+                // Логіка для незагіпнотизованих зомбі: атакувати загіпнотизованих
+                let engagedConverted = null;
+                for (const cZombie of convertedZombies) {
+                    const dx = this.x - cZombie.x;
+                    const dy = this.y - cZombie.y;
+                    const distance = Math.sqrt(dx*dx + dy*dy);
+                    if (distance < (this.size * this.shrinkFactor) + (cZombie.size * cZombie.shrinkFactor) + 5) {
+                        engagedConverted = cZombie;
+                        break;
+                    }
+                }
+
+                if (engagedConverted) {
+                    if (this.attackCooldown > 0) {
+                        this.attackCooldown--;
+                    } else {
+                        engagedConverted.health -= this.damage;
+                        this.attackCooldown = this.maxAttackCooldown;
+                    }
+                    return; // Зупинитися і битися
+                }
+
+                this.moveAlongPath();
+            }
+
+            moveAlongPath() {
+                let finalSlowFactor = 1.0;
+                if (this.slowTimer > 0) {
+                    this.slowTimer--;
+                    finalSlowFactor = Math.min(finalSlowFactor, this.slowFactor);
+                } else {
+                    this.slowFactor = 1.0; // Скинути фактор, коли таймер закінчився
+                }
+
+                if (this.isCryoSlowed) {
+                    finalSlowFactor = Math.min(finalSlowFactor, TOWER_DEFINITIONS.CRYO_GENERATOR.slowFactor);
+                    this.isCryoSlowed = false;
+                }
+                this.speed = this.baseSpeed * finalSlowFactor * this.shrinkFactor;
+
+                if (this.pathIndex < path.length) {
+                    const targetX = path[this.pathIndex].x * TILE_SIZE + TILE_SIZE / 2;
+                    const targetY = path[this.pathIndex].y * TILE_SIZE + TILE_SIZE / 2;
+                    const dx = targetX - this.x;
+                    const dy = targetY - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < this.speed) {
+                        this.x = targetX;
+                        this.y = targetY;
+                        this.pathIndex++;
+                    } else {
+                        this.x += (dx / distance) * this.speed;
+                        this.y += (dy / distance) * this.speed; 
+                    }
+                }
+            }
+        }
+        
+        class Boss extends Enemy {
+            constructor(waveNumber) {
+                super(waveNumber);
+                this.maxHealth = (500 + waveNumber * 50) * 2; 
+                this.health = this.maxHealth;
+                this.baseSpeed = 0.3 + waveNumber * 0.02; 
+                this.size = 20;
+                this.goldValue = 150 + waveNumber * 20; 
+                this.damage = 20 + waveNumber * 2;
+                this.isBoss = true;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.font = `${this.size * 2}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                ctx.fillStyle = this.slowTimer > 0 ? '#4990e8' : '#6f42c1';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * 1.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (this.stunTimer > 0) {
+                    ctx.fillStyle = 'rgba(255, 255, 0, 0.7)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.fillText('💀', this.x, this.y); 
+
+                ctx.restore();
+                this.drawHealthBar(this.size * this.shrinkFactor);
+
+                if (this.dotTimer > 0) {
+                    ctx.fillStyle = 'rgba(253, 126, 20, 0.8)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y - this.size, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        class NecromancerBoss extends Boss {
+            constructor(waveNumber) {
+                super(waveNumber);
+                this.maxHealth = (800 + waveNumber * 80) * 2;
+                this.health = this.maxHealth;
+                this.size = 22;
+                this.goldValue = 500 + waveNumber * 40;
+                this.spawnCooldown = 0;
+                this.maxSpawnCooldown = 480; // 8 секунд
+            }
+
+            draw() {
+                ctx.save();
+                ctx.font = `${this.size * 2}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                ctx.fillStyle = this.slowTimer > 0 ? '#4990e8' : '#800080';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * 1.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillText('👿', this.x, this.y); 
+
+                ctx.restore();
+                this.drawHealthBar(this.size * this.shrinkFactor);
+            }
+
+            update() {
+                super.update(); // Рух, ефекти
+                if (this.spawnCooldown > 0) {
+                    this.spawnCooldown--;
+                } else {
+                    const spawnCount = Math.floor(Math.random() * 2) + 1;
+                    for (let i = 0; i < spawnCount; i++) {
+                        const newEnemy = new Enemy(wave);
+                        newEnemy.x = this.x + (Math.random() - 0.5) * 40;
+                        newEnemy.y = this.y + (Math.random() - 0.5) * 40;
+                        newEnemy.maxHealth *= 0.5;
+                        newEnemy.health = newEnemy.maxHealth;
+                        enemies.push(newEnemy);
+                    }
+                    logMessage(`Некромант призиває ${spawnCount} зомбі!`, 'boss');
+                    this.spawnCooldown = this.maxSpawnCooldown;
+                }
+            }
+        }
+        
+        class Drone {
+            constructor(parentFactory) {
+                this.parentFactory = parentFactory;
+                this.orbitalAngle = Math.random() * Math.PI * 2;
+                this.orbitalRadius = 30 + Math.random() * 15;
+                this.x = this.parentFactory.x + this.orbitalRadius * Math.cos(this.orbitalAngle);
+                this.y = this.parentFactory.y + this.orbitalRadius * Math.sin(this.orbitalAngle);
+                this.size = 6;
+                this.target = null;
+                this.cooldown = Math.random() * this.parentFactory.droneCooldown;
+            }
+
+            draw() {
+                ctx.fillStyle = '#f8f9fa';
+                ctx.strokeStyle = '#212529';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            update() {
+                // Orbit around the factory
+                this.orbitalAngle += 0.02;
+                this.x = this.parentFactory.x + this.orbitalRadius * Math.cos(this.orbitalAngle);
+                this.y = this.parentFactory.y + this.orbitalRadius * Math.sin(this.orbitalAngle);
+
+                if (this.cooldown > 0) {
+                    this.cooldown--;
+                } else {
+                    this.findTarget();
+                    if (this.target) {
+                        projectiles.push(new Projectile(this.x, this.y, this.target, this.parentFactory.droneDamage, 'DRONE_SHOT'));
+                        this.cooldown = this.parentFactory.droneCooldown;
+                    }
+                }
+            }
+            
+            findTarget() {
+                this.target = null;
+                let bestTarget = null;
+                let highestPathIndex = -1;
+
+                for (const enemy of enemies) {
+                    if (enemy.isGold) continue; // Не стріляти в золоті статуї
+                    const dx = enemy.x - this.parentFactory.x;
+                    const dy = enemy.y - this.parentFactory.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance <= this.parentFactory.droneRange) {
+                        if (enemy.pathIndex > highestPathIndex) {
+                            highestPathIndex = enemy.pathIndex;
+                            bestTarget = enemy;
+                        }
+                    }
+                }
+                this.target = bestTarget;
+            }
+        }
+
+
+        class Tower {
+            constructor(gridX, gridY, type) {
+                const def = TOWER_DEFINITIONS[type];
+                this.x = gridX * TILE_SIZE + TILE_SIZE / 2;
+                this.y = gridY * TILE_SIZE + TILE_SIZE / 2;
+                this.type = type;
+                this.name = def.name;
+                this.range = def.range;
+                this.level = 1;
+                this.damage = def.damage; 
+                this.cooldown = def.cooldown; 
+                this.currentCooldown = 0;
+                this.color = def.color;
+                this.icon = def.icon;
+                this.totalCost = def.cost;
+                this.angle = 0;
+                
+                this.income = def.income || 0;
+                this.chainTargets = def.chainTargets || 0;
+                this.slowDuration = def.slowDuration || 0;
+                this.stunDuration = def.stunDuration || 0;
+                this.damageMultiplier = 1.0;
+                this.gatlingBonus = 0;
+                this.cooldownMultiplier = 1.0; 
+                this.damageAmplification = def.damageAmplification || 0; 
+                this.cooldownReduction = def.cooldownReduction || 1.0; 
+                this.targets = def.initialTargets || 1;
+                this.orbitalRadius = def.orbitalRadius || 0;
+                this.shrinkFactor = def.shrinkFactor || 1.0;
+                this.instakillChance = def.instakillChance || 0;
+                this.poisonDuration = def.poisonDuration || 0;
+
+                if (this.type === 'BLADE_VORTEX') {
+                    orbitalProjectiles.push(new OrbitalProjectile(this));
+                }
+                
+                if (this.type === 'ROBOT_FACTORY') {
+                    this.droneCount = def.initialDrones;
+                    this.droneDamage = def.droneDamage;
+                    this.droneRange = def.droneRange;
+                    this.droneCooldown = def.droneCooldown;
+                }
+            }
+
+            spawnDrones() {
+                for(let i=0; i < this.droneCount; i++) {
+                    drones.push(new Drone(this));
+                }
+            }
+
+            despawnDrones() {
+                 for (let i = drones.length - 1; i >= 0; i--) {
+                    if (drones[i].parentFactory === this) {
+                        drones.splice(i, 1);
+                    }
+                }
+            }
+
+
+            upgrade(upgradeCost) {
+                if (this.level >= MAX_TOWER_LEVEL) return false;
+                const def = TOWER_DEFINITIONS[this.type];
+                
+                this.level++;
+                this.totalCost += upgradeCost;
+                
+                switch(this.type) {
+                    case 'ALCHEMIST':
+                        this.range += def.upgradeRange;
+                        this.instakillChance += def.upgradeInstakillChance;
+                        break;
+                    case 'ROBOT_FACTORY':
+                        this.droneCount += def.upgradeDrones;
+                        this.droneRange += def.upgradeDroneRange;
+                        this.despawnDrones();
+                        this.spawnDrones();
+                        break;
+                    case 'POISON_SPRAYER':
+                        this.damage += def.upgradeDamage; // damage is the stacking DoT damage
+                        this.cooldown = Math.max(5, this.cooldown - def.upgradeCooldown);
+                        break;
+                    case 'BALLISTA':
+                        this.damage += def.upgradeDamage;
+                        this.cooldown = Math.max(20, this.cooldown - def.upgradeCooldown);
+                        if (this.level % def.upgradeTargetsLevelInterval === 0) {
+                            this.targets++;
+                        }
+                        break;
+                    case 'BLADE_VORTEX':
+                        this.damage += def.upgradeDamage;
+                        this.orbitalRadius += def.upgradeRadius;
+                        break;
+                    case 'SHRINK_RAY':
+                        this.range += def.upgradeRange;
+                        this.shrinkFactor = Math.max(0.25, this.shrinkFactor - def.upgradeShrinkFactor);
+                        break;
+                    case 'HYPNO_TOWER':
+                        this.range += def.upgradeRange;
+                        this.cooldown = Math.max(60, this.cooldown - def.upgradeCooldown);
+                        break;
+                    case 'TESLA':
+                        this.damage += def.upgradeDamage;
+                        this.chainTargets++; 
+                        break;
+                    case 'SLOW':
+                        this.slowDuration += def.upgradeDuration; 
+                        this.cooldown = Math.max(20, this.cooldown - def.upgradeCooldown);
+                        break;
+                    case 'SNIPER':
+                        this.damage += def.upgradeDamage;
+                        this.cooldown = Math.max(60, this.cooldown - def.upgradeCooldown); 
+                        break;
+                    case 'SUPPORT':
+                        this.range += def.upgradeRange;
+                        break;
+                    case 'VULNERABILITY_BEACON':
+                        this.range += def.upgradeRange;
+                        this.damageAmplification += def.upgradeAmplification;
+                        break;
+                    case 'CHRONO_BOOSTER':
+                        this.range += def.upgradeRange;
+                        this.cooldownReduction = Math.max(0.3, this.cooldownReduction - def.upgradeReduction);
+                        break;
+                    case 'CRYO_GENERATOR':
+                        this.range += def.upgradeRange;
+                        this.damage += def.upgradeDamage;
+                        break;
+                    case 'SPIKE_TRAP':
+                        this.damage += def.upgradeDamage;
+                        this.cooldown = Math.max(30, this.cooldown - def.upgradeCooldown);
+                        break;
+                    default: 
+                        this.damage += def.upgradeDamage;
+                        if (def.upgradeCooldown) {
+                            this.cooldown = Math.max(5, this.cooldown - def.upgradeCooldown);
+                        }
+                        break;
+                }
+                return true;
+            }
+
+            draw() {
+                if (selectedTower === this && this.range > 0) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; 
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+                
+                if (selectedTower === this && this.type === 'ROBOT_FACTORY') {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.droneRange, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; 
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+
+
+                // Common variables
+                const size = TILE_SIZE;
+                const radius = size / 2.5;
+                const shouldRotate = !['SUPPORT', 'TESLA', 'CRYO_GENERATOR', 'EMP', 'VULNERABILITY_BEACON', 'CHRONO_BOOSTER', 'BLADE_VORTEX', 'SHRINK_RAY', 'HYPNO_TOWER', 'ROBOT_FACTORY', 'SLOW'].includes(this.type);
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                if (shouldRotate) {
+                    ctx.rotate(this.angle);
+                }
+
+                ctx.fillStyle = this.color;
+                ctx.strokeStyle = '#1a1a1a';
+                ctx.lineWidth = 2;
+
+                switch(this.type) {
+                    case 'GAUBITSIA':
+                        // Heavy hexagonal base
+                        ctx.fillStyle = '#343a40';
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Turret mount
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.9, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Short, thick barrel
+                        ctx.fillStyle = this.color;
+                        ctx.fillRect(0, -radius*0.4, radius * 1.5, radius*0.8);
+                        ctx.strokeRect(0, -radius*0.4, radius * 1.5, radius*0.8);
+                        // Muzzle brake
+                        ctx.fillStyle = '#212529';
+                        ctx.fillRect(radius*1.5, -radius*0.5, radius*0.3, radius*1.0);
+                        break;
+                    case 'SNIPER':
+                        // Base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Turret body
+                        ctx.fillStyle = this.color;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Barrel
+                        ctx.fillRect(0, -2, radius * 2.5, 4);
+                        ctx.strokeRect(0, -2, radius * 2.5, 4);
+                        // Scope
+                        ctx.fillStyle = '#6c757d';
+                        ctx.fillRect(radius*0.5, -5, radius*0.8, 3);
+                        break;
+                    case 'TESLA':
+                        // Base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // Insulators
+                        ctx.fillStyle = '#dee2e6';
+                        for (let i = 0; i < 3; i++) {
+                            const angle = i * (Math.PI * 2 / 3);
+                            ctx.beginPath();
+                            ctx.arc(radius * 0.7 * Math.cos(angle), radius * 0.7 * Math.sin(angle), 3, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+
+                        // Central sphere
+                        ctx.fillStyle = this.color;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // Electric arcs effect
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                        ctx.lineWidth = 1;
+                        for (let i = 0; i < 5; i++) {
+                            ctx.beginPath();
+                            ctx.moveTo(0, 0);
+                            const angle = Math.random() * Math.PI * 2;
+                            const dist = radius * (0.8 + Math.random() * 0.4);
+                            ctx.lineTo(dist * Math.cos(angle), dist * Math.sin(angle));
+                            ctx.stroke();
+                        }
+                        break;
+                    case 'SLOW':
+                        // Hexagonal frost base
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+
+                        // Darker metal base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        
+                        // Central crystal
+                        ctx.fillStyle = this.color;
+                        ctx.globalAlpha = 0.7 + Math.abs(Math.sin(Date.now() / 300)) * 0.3; // Slower pulse
+                        ctx.beginPath();
+                        ctx.moveTo(0, -radius);
+                        ctx.lineTo(radius*0.7, 0);
+                        ctx.lineTo(0, radius);
+                        ctx.lineTo(-radius*0.7, 0);
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // Crystal outline/shine
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                        ctx.globalAlpha = 1.0;
+                        break;
+                    case 'FLAMETHROWER':
+                        // Base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Fuel Tanks (now two, more distinct)
+                        ctx.fillStyle = this.color;
+                        ctx.fillRect(-radius*0.8, -radius*0.8, radius*0.6, radius*1.6);
+                        ctx.strokeRect(-radius*0.8, -radius*0.8, radius*0.6, radius*1.6);
+                        ctx.fillRect(radius*0.2, -radius*0.8, radius*0.6, radius*1.6);
+                        ctx.strokeRect(radius*0.2, -radius*0.8, radius*0.6, radius*1.6);
+                        // Nozzle
+                        ctx.fillStyle = '#212529';
+                        ctx.beginPath();
+                        ctx.moveTo(radius*0.4, -radius*0.4);
+                        ctx.lineTo(radius * 1.6, -radius*0.5);
+                        ctx.lineTo(radius * 1.6, radius*0.5);
+                        ctx.lineTo(radius*0.4, radius*0.4);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Pilot light
+                        ctx.fillStyle = 'rgba(255, 220, 0, 0.9)';
+                        ctx.beginPath();
+                        ctx.arc(radius*1.65, 0, 4, 0, Math.PI*2);
+                        ctx.fill();
+                        break;
+                    case 'ROCKET_LAUNCHER':
+                        // Heavy hexagonal base
+                        ctx.fillStyle = '#343a40';
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.1 * Math.cos(i * Math.PI / 3), radius * 1.1 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Rotating platform
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Launch tube
+                        ctx.fillStyle = this.color;
+                        const tubeWidth = radius * 2.5;
+                        const tubeHeight = radius * 1.2;
+                        ctx.save();
+                        ctx.rotate(-Math.PI / 12); // Slight upward angle
+                        ctx.fillRect(0, -tubeHeight/2, tubeWidth, tubeHeight);
+                        ctx.strokeRect(0, -tubeHeight/2, tubeWidth, tubeHeight);
+                        // Rocket tip visible
+                        ctx.fillStyle = '#dc3545';
+                        ctx.beginPath();
+                        ctx.moveTo(tubeWidth, 0);
+                        ctx.lineTo(tubeWidth - 10, -tubeHeight/2 + 2);
+                        ctx.lineTo(tubeWidth - 10, tubeHeight/2 - 2);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.restore();
+                        break;
+                    case 'GATLING':
+                        // Base
+                        ctx.fillStyle = '#495057'; // Darker base
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        ctx.fillStyle = '#6c757d'; // Turret body
+                        ctx.fillRect(-radius*0.5, -radius*0.7, radius, radius*1.4);
+                        ctx.strokeRect(-radius*0.5, -radius*0.7, radius, radius*1.4);
+
+                        // Barrel housing
+                        ctx.fillStyle = this.color;
+                        ctx.beginPath();
+                        ctx.arc(radius*0.5, 0, radius*0.8, -Math.PI/2, Math.PI/2);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // Barrels
+                        for(let i = -2; i <= 2; i++){
+                            if(i === 0) continue;
+                            const yOffset = i * 4;
+                            ctx.fillStyle = '#212529';
+                            ctx.fillRect(radius * 0.5, yOffset - 1, radius * 1.2, 2);
+                        }
+                        break;
+                    case 'MORTAR':
+                        // Heavy circular base
+                        ctx.fillStyle = '#343a40';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Rotating part
+                        ctx.fillStyle = '#6c757d';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.9, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Tube
+                        ctx.save();
+                        ctx.rotate(-Math.PI / 3); // Angled up
+                        ctx.fillStyle = this.color;
+                        ctx.fillRect(0, -radius*0.4, radius*2, radius*0.8);
+                        ctx.strokeRect(0, -radius*0.4, radius*2, radius*0.8);
+                        // Reinforcement rings on barrel
+                        ctx.fillStyle = '#212529';
+                        ctx.fillRect(radius*0.5, -radius*0.5, 3, radius);
+                        ctx.fillRect(radius*1.2, -radius*0.5, 3, radius);
+                        ctx.restore();
+                        break;
+                    case 'RAILGUN':
+                        // Heavy Base
+                        ctx.fillStyle = '#343a40';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Capacitor/Body
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.7, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        
+                        // The Rails
+                        ctx.fillStyle = this.color;
+                        ctx.fillRect(0, -radius*0.4, radius * 2.8, 4); // Top Rail
+                        ctx.fillRect(0, radius*0.4 - 4, radius * 2.8, 4); // Bottom Rail
+                        
+                        // Glowing parts
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*0.3, 0, Math.PI*2);
+                        ctx.fill();
+                        // Energy effect between rails
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        for(let i=0; i < radius * 2.8; i+=4) {
+                            ctx.lineTo(i, (Math.random() - 0.5) * 5);
+                        }
+                        ctx.stroke();
+                        break;
+                    case 'SUPPORT':
+                        // Base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.1 * Math.cos(i * Math.PI / 3), radius * 1.1 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Central crystal
+                        ctx.fillStyle = this.color;
+                        ctx.beginPath();
+                        ctx.moveTo(0, -radius*0.8);
+                        ctx.lineTo(radius*0.7, 0);
+                        ctx.lineTo(0, radius*0.8);
+                        ctx.lineTo(-radius*0.7, 0);
+                        ctx.closePath();
+                        ctx.fill();
+                        // Pulsing effect
+                        ctx.globalAlpha = Math.abs(Math.sin(Date.now() / 300));
+                        ctx.strokeStyle = this.color;
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.arc(0,0, radius*1.2, 0, Math.PI*2);
+                        ctx.stroke();
+                        ctx.globalAlpha = 1.0;
+                        break;
+                    case 'EMP':
+                        // Base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Prongs holding the sphere
+                        ctx.strokeStyle = '#6c757d';
+                        ctx.lineWidth = 4;
+                        for(let i=0; i<4; i++){
+                            ctx.beginPath();
+                            ctx.moveTo(0,0);
+                            ctx.lineTo(radius * Math.cos(i*Math.PI/2 + Math.PI/4), radius * Math.sin(i*Math.PI/2 + Math.PI/4));
+                            ctx.stroke();
+                        }
+                        // Sphere
+                        ctx.fillStyle = this.color;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*0.7, 0, Math.PI*2);
+                        ctx.fill();
+                        // Inner core
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*0.3, 0, Math.PI*2);
+                        ctx.fill();
+                        break;
+                    case 'SINGULARITY':
+                        // Large, stable base
+                        ctx.fillStyle = '#212529';
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.3 * Math.cos(i * Math.PI / 3), radius * 1.3 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Containment rings
+                        ctx.strokeStyle = '#6f42c1'; // Purple energy
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.7, 0, Math.PI * 2);
+                        ctx.stroke();
+                        // The singularity core
+                        ctx.fillStyle = this.color; // Black hole
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*0.5, 0, Math.PI*2);
+                        ctx.fill();
+                        // Accretion disk/energy effect
+                        const grad = ctx.createRadialGradient(0, 0, radius*0.5, 0, 0, radius*1.1);
+                        grad.addColorStop(0, 'rgba(76, 5, 25, 0)');
+                        grad.addColorStop(0.8, this.color + 'aa');
+                        grad.addColorStop(1, 'rgba(255, 255, 255, 0.5)');
+                        ctx.fillStyle = grad;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*1.1, 0, Math.PI*2);
+                        ctx.fill();
+                        break;
+                    case 'CRYO_GENERATOR':
+                        // Base platform
+                        ctx.fillStyle = '#6c757d';
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Central cooling unit
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Emitter crystal
+                        ctx.fillStyle = this.color;
+                        ctx.beginPath();
+                        ctx.moveTo(0, -radius * 0.8);
+                        ctx.lineTo(radius * 0.7, 0);
+                        ctx.lineTo(0, radius * 0.8);
+                        ctx.lineTo(-radius * 0.7, 0);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Frost effect
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 1.2, 0, Math.PI * 2);
+                        ctx.fill();
+                        break;
+                    case 'ORBITAL_STRIKE':
+                        // Base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Dish mount
+                        ctx.fillStyle = '#6c757d';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*0.8, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Dish
+                        ctx.strokeStyle = this.color;
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, -Math.PI/3, Math.PI/3);
+                        ctx.stroke();
+                        // Emitter
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath();
+                        ctx.arc(radius*0.7, 0, 4, 0, Math.PI*2);
+                        ctx.fill();
+                        break;
+                    case 'GRENADE_LAUNCHER':
+                        // Base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Revolver Body
+                        ctx.fillStyle = this.color;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*0.8, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Chambers
+                        ctx.fillStyle = '#212529';
+                        for(let i=0; i<6; i++) {
+                            const angle = i * Math.PI / 3;
+                            ctx.beginPath();
+                            ctx.arc(radius*0.5 * Math.cos(angle), radius*0.5 * Math.sin(angle), 3, 0, Math.PI*2);
+                            ctx.fill();
+                        }
+                        // Barrel
+                        ctx.fillStyle = '#6c757d';
+                        ctx.fillRect(radius*0.7, -radius*0.25, radius*0.8, radius*0.5);
+                        ctx.strokeRect(radius*0.7, -radius*0.25, radius*0.8, radius*0.5);
+                        break;
+                    case 'VULNERABILITY_BEACON':
+                        // Tripod base
+                        ctx.strokeStyle = '#6c757d';
+                        ctx.lineWidth = 3;
+                        for (let i = 0; i < 3; i++) {
+                            const angle = i * (Math.PI * 2 / 3);
+                            ctx.beginPath();
+                            ctx.moveTo(0, 0);
+                            ctx.lineTo(radius * 0.8 * Math.cos(angle), radius * 0.8 * Math.sin(angle));
+                            ctx.stroke();
+                        }
+                        // Central platform
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.5, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Emitter crystal
+                        ctx.fillStyle = this.color;
+                        const rotationAngle = (Date.now() / 500) % (Math.PI * 2);
+                        ctx.save();
+                        ctx.rotate(rotationAngle);
+                        ctx.fillRect(-radius*0.2, -radius*0.8, radius*0.4, radius*1.6);
+                        ctx.restore();
+                        break;
+                    case 'CHRONO_BOOSTER':
+                        // Base
+                        ctx.fillStyle = '#6c757d';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*1.1, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Clock face
+                        ctx.fillStyle = '#dee2e6';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI*2);
+                        ctx.fill();
+                        // Clock hands
+                        ctx.strokeStyle = '#1a1a1a';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(0,0);
+                        ctx.lineTo(0, -radius*0.7);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(0,0);
+                        ctx.lineTo(radius*0.5, 0);
+                        ctx.stroke();
+                        break;
+                    case 'BALLISTA': // Renamed to "Шипомет"
+                        // Heavy circular base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 1.1, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Rotating turret body
+                        ctx.fillStyle = '#6c757d';
+                        ctx.fillRect(-radius*0.5, -radius*0.8, radius*1.2, radius*1.6);
+                        ctx.strokeRect(-radius*0.5, -radius*0.8, radius*1.2, radius*1.6);
+                        // Spike barrels
+                        ctx.fillStyle = this.color;
+                        const barrelYOffset = radius * 0.4;
+                        ctx.fillRect(0, -barrelYOffset - 2, radius * 2.2, 4); // Top barrel
+                        ctx.strokeRect(0, -barrelYOffset - 2, radius * 2.2, 4);
+                        ctx.fillRect(0, barrelYOffset - 2, radius * 2.2, 4); // Bottom barrel
+                        ctx.strokeRect(0, barrelYOffset - 2, radius * 2.2, 4);
+                        // Spike heads
+                        ctx.fillStyle = '#adb5bd';
+                        // Top spike head
+                        ctx.beginPath();
+                        ctx.moveTo(radius*2.3, -barrelYOffset);
+                        ctx.lineTo(radius*2.1, -barrelYOffset-4);
+                        ctx.lineTo(radius*2.1, -barrelYOffset+4);
+                        ctx.closePath();
+                        ctx.fill();
+                        // Bottom spike head
+                        ctx.beginPath();
+                        ctx.moveTo(radius*2.3, barrelYOffset);
+                        ctx.lineTo(radius*2.1, barrelYOffset-4);
+                        ctx.lineTo(radius*2.1, barrelYOffset+4);
+                        ctx.closePath();
+                        ctx.fill();
+                        break;
+                    case 'POISON_SPRAYER':
+                        // Base
+                        ctx.fillStyle = '#343a40';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Rotating part
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Tank on the back
+                        ctx.fillStyle = this.color;
+                        ctx.fillRect(-radius*0.7, -radius*0.5, radius*0.7, radius*1.0);
+                        ctx.strokeRect(-radius*0.7, -radius*0.5, radius*0.7, radius*1.0);
+                        // Three nozzles for cone spray
+                        ctx.fillStyle = '#212529';
+                        ctx.fillRect(radius*0.5, -radius*0.4, radius, 3); // Top nozzle
+                        ctx.fillRect(radius*0.5, -1.5, radius*1.2, 3);   // Middle nozzle
+                        ctx.fillRect(radius*0.5, radius*0.4 - 3, radius, 3); // Bottom nozzle
+                        break;
+                    case 'BLADE_VORTEX':
+                        // Base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Rotating part
+                        ctx.fillStyle = this.color;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*0.6, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Axle
+                        ctx.fillStyle = '#212529';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*0.2, 0, Math.PI*2);
+                        ctx.fill();
+                        break;
+                    case 'SHRINK_RAY':
+                        // Tripod base
+                        ctx.strokeStyle = '#495057';
+                        ctx.lineWidth = 4;
+                        for(let i=0; i<3; i++){
+                            const angle = i * (Math.PI*2/3) + Math.PI/2;
+                            ctx.beginPath();
+                            ctx.moveTo(0,0);
+                            ctx.lineTo(radius*Math.cos(angle), radius*Math.sin(angle));
+                            ctx.stroke();
+                        }
+                        // Main body
+                        ctx.fillStyle = '#6c757d';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*0.8, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Large lens
+                        ctx.fillStyle = this.color;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius*0.6, 0, Math.PI*2);
+                        ctx.fill();
+                        // Lens highlight
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                        ctx.beginPath();
+                        ctx.arc(-radius*0.2, -radius*0.2, radius*0.3, 0, Math.PI*2);
+                        ctx.fill();
+                        break;
+                    case 'HYPNO_TOWER':
+                        // Base
+                        ctx.fillStyle = '#212529';
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Pulsating sphere
+                        const pulse = 1 + Math.sin(Date.now() / 400) * 0.1;
+                        const gradPulse = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * pulse);
+                        gradPulse.addColorStop(0, '#fff');
+                        gradPulse.addColorStop(0.5, this.color);
+                        gradPulse.addColorStop(1, 'rgba(0,0,0,0)');
+                        
+                        ctx.fillStyle = gradPulse;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * pulse, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // Rotating rings
+                        ctx.strokeStyle = this.color;
+                        ctx.lineWidth = 1.5;
+                        ctx.globalAlpha = 0.8;
+                        const time = Date.now() / 2000;
+                        ctx.save();
+                        ctx.scale(1, 0.3); // Ellipse effect
+                        ctx.rotate(time);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.rotate(1.5);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 1.3, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.restore();
+                        ctx.globalAlpha = 1.0;
+                        break;
+                    case 'ROBOT_FACTORY':
+                        // Hexagonal base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Main building
+                        ctx.fillStyle = this.color;
+                        ctx.fillRect(-radius*0.8, -radius*0.8, radius*1.6, radius*1.6);
+                        ctx.strokeRect(-radius*0.8, -radius*0.8, radius*1.6, radius*1.6);
+                        // Hatch
+                        ctx.fillStyle = '#212529';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.5, 0, Math.PI*2);
+                        ctx.fill();
+                        // Lights
+                        ctx.fillStyle = '#ffc107';
+                        ctx.beginPath();
+                        ctx.arc(-radius*0.6, -radius*0.6, 2, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.arc(radius*0.6, -radius*0.6, 2, 0, Math.PI*2);
+                        ctx.fill();
+                        break;
+                    case 'SPIKE_TRAP':
+                        // Новий дизайн "Капкан"
+                        ctx.globalAlpha = this.currentCooldown > 0 ? 0.3 : 1.0;
+                        
+                        // Основа капкана
+                        ctx.fillStyle = '#343a40';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // "Щелепи" у відкритому стані
+                        if (this.currentCooldown > 0) {
+                            ctx.strokeStyle = this.color;
+                            ctx.lineWidth = 4;
+                            ctx.beginPath();
+                            ctx.arc(0, 0, radius, Math.PI * 1.1, Math.PI * 1.9);
+                            ctx.stroke();
+                            ctx.beginPath();
+                            ctx.arc(0, 0, radius, Math.PI * 0.1, Math.PI * 0.9);
+                            ctx.stroke();
+                        }
+                        
+                        // "Щелепи" у закритому стані (активні)
+                        if (this.currentCooldown <= 0) {
+                            ctx.fillStyle = this.color;
+                            ctx.lineWidth = 2;
+                            // Натискна пластина
+                            ctx.fillStyle = '#5a6670';
+                            ctx.beginPath();
+                            ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            // Зубці
+                            ctx.fillStyle = this.color;
+                            for(let i=0; i<8; i++) {
+                                const angle = i * (Math.PI*2) / 8;
+                                ctx.beginPath();
+                                ctx.moveTo(radius*0.7 * Math.cos(angle), radius*0.7 * Math.sin(angle));
+                                ctx.lineTo(radius*1.1 * Math.cos(angle), radius*1.1 * Math.sin(angle));
+                                ctx.lineTo(radius*0.7 * Math.cos(angle + 0.2), radius*0.7 * Math.sin(angle + 0.2));
+                                ctx.closePath();
+                                ctx.fill();
+                            }
+                        }
+                        
+                        ctx.globalAlpha = 1.0;
+                        break;
+                    case 'ALCHEMIST':
+                        // Base
+                        ctx.fillStyle = '#495057';
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        // Central "pot"
+                        ctx.fillStyle = '#212529';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI*2);
+                        ctx.fill();
+                        // Bubbling gold
+                        ctx.fillStyle = this.color; // Gold
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.8, 0, Math.PI*2);
+                        ctx.fill();
+                        // Bubbles
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                        ctx.beginPath();
+                        ctx.arc(0, -radius*0.3, 3, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.arc(-radius*0.3, radius*0.2, 2, 0, Math.PI*2);
+                        ctx.fill();
+                        break;
+                    default:
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        break;
+                }
+                
+                ctx.restore();
+                
+                ctx.fillStyle = this.level === MAX_TOWER_LEVEL ? '#ffc107' : '#dee2e6';
+                ctx.font = 'bold 12px Inter';
+                ctx.textAlign = 'center';
+                ctx.fillText(`Lv${this.level}`, this.x, this.y - 18);
+            }
+
+            update() {
+                if (this.type === 'ROBOT_FACTORY') {
+                    return; // The factory itself doesn't do anything in update, its drones do.
+                }
+
+                if (this.type === 'SPIKE_TRAP') {
+                    if (this.currentCooldown > 0) {
+                        this.currentCooldown--;
+                        return;
+                    }
+
+                    let triggered = false;
+                    for (const enemy of enemies) {
+                        if (enemy.isGold) continue;
+                        const dx = enemy.x - this.x;
+                        const dy = enemy.y - this.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance < TILE_SIZE / 1.5) { // Activation radius
+                            enemy.health -= this.damage * this.damageMultiplier * enemy.damageTakenMultiplier;
+                            enemy.slowTimer = this.slowDuration;
+                            enemy.slowFactor = TOWER_DEFINITIONS.SPIKE_TRAP.slowFactor;
+                            triggered = true;
+                        }
+                    }
+
+                    if (triggered) {
+                        this.currentCooldown = this.cooldown * this.cooldownMultiplier;
+                    }
+                    return;
+                }
+
+                if (this.type === 'CRYO_GENERATOR') {
+                    const dps = this.damage * this.damageMultiplier;
+                    const damagePerFrame = dps / 60;
+
+                    for (const enemy of enemies) {
+                        if (enemy.isGold) continue;
+                        const dx = enemy.x - this.x;
+                        const dy = enemy.y - this.y;
+                        if (Math.sqrt(dx*dx + dy*dy) <= this.range) {
+                            enemy.isCryoSlowed = true;
+                            enemy.health -= damagePerFrame * enemy.damageTakenMultiplier;
+                        }
+                    }
+                }
+
+                if (['SUPPORT', 'CRYO_GENERATOR', 'VULNERABILITY_BEACON', 'CHRONO_BOOSTER', 'BLADE_VORTEX', 'SHRINK_RAY'].includes(this.type)) {
+                    return;
+                }
+                
+                if (this.currentCooldown > 0) {
+                    this.currentCooldown--;
+                } else {
+                    if (this.type === 'FLAMETHROWER') {
+                        this.shootFlamethrower();
+                        this.currentCooldown = this.cooldown;
+                        return;
+                    }
+                    if (this.type === 'POISON_SPRAYER') {
+                        this.shootPoisonCone(); // Нова функція
+                        this.currentCooldown = this.cooldown;
+                        return;
+                    }
+                }
+
+                if (this.type === 'BALLISTA') {
+                    const targets = this.findTargets(this.targets);
+                    if (targets.length > 0) {
+                        this.angle = Math.atan2(targets[0].y - this.y, targets[0].x - this.x);
+                        if(this.currentCooldown <= 0) {
+                            targets.forEach(target => this.shoot(target));
+                            this.currentCooldown = this.cooldown * this.cooldownMultiplier;
+                        }
+                    }
+                    return; 
+                }
+
+                if (this.type === 'HYPNO_TOWER') {
+                     const maxHypnotized = towers.filter(t => t.type === 'HYPNO_TOWER').length;
+                     if (convertedZombies.length < maxHypnotized && this.currentCooldown <= 0) {
+                         const target = this.findTarget();
+                         if (target && !target.isBoss) {
+                             this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+                             this.shoot(target);
+                             this.currentCooldown = this.cooldown * this.cooldownMultiplier;
+                         }
+                     }
+                     return;
+                }
+
+                const target = this.findTarget();
+
+                if (target) {
+                    this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+                    if(this.currentCooldown <= 0) {
+                        this.shoot(target);
+                        const def = TOWER_DEFINITIONS[this.type];
+                        if (this.type === 'GATLING') {
+                            this.gatlingBonus = Math.min(this.gatlingBonus + 0.5, 30);
+                            this.currentCooldown = Math.max(1, this.cooldown - this.gatlingBonus * (def.upgradeCooldown || 0.5));
+                        } else {
+                            this.currentCooldown = this.cooldown * this.cooldownMultiplier;
+                        }
+                    }
+                } else if (this.type === 'GATLING') {
+                    this.gatlingBonus = 0;
+                }
+            }
+
+            findTargets(numTargets) {
+                const targets = [];
+                const sortedEnemies = [...enemies].sort((a, b) => b.pathIndex - a.pathIndex);
+
+                for (const enemy of sortedEnemies) {
+                    if (enemy.isGold) continue;
+                    if (targets.length >= numTargets) break;
+                    const dx = enemy.x - this.x;
+                    const dy = enemy.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance <= this.range) {
+                        targets.push(enemy);
+                    }
+                }
+                return targets;
+            }
+
+            findTarget() {
+                 if (this.type === 'ORBITAL_STRIKE') {
+                    let bestTarget = null;
+                    let highestHealth = 0;
+                    for (const enemy of enemies) {
+                        if (enemy.isGold) continue;
+                        if (enemy.health > highestHealth) {
+                            highestHealth = enemy.health;
+                            bestTarget = enemy;
+                        }
+                    }
+                    return bestTarget;
+                }
+                
+                let bestTarget = null;
+                let highestPathIndex = -1;
+                let bestDistance = Infinity; 
+
+                for (const enemy of enemies) {
+                    if (enemy.isGold) continue;
+                    const dx = enemy.x - this.x;
+                    const dy = enemy.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance <= this.range) {
+                        if (this.type === 'MORTAR' && distance < TOWER_DEFINITIONS.MORTAR.minRange) {
+                            continue;
+                        }
+                        if (enemy.pathIndex > highestPathIndex) {
+                            highestPathIndex = enemy.pathIndex;
+                            bestTarget = enemy;
+                            bestDistance = distance;
+                        } else if (enemy.pathIndex === highestPathIndex && distance < bestDistance) {
+                            bestTarget = enemy;
+                            bestDistance = distance;
+                        }
+                    }
+                }
+                return bestTarget;
+            }
+            
+            shoot(target) {
+                if (this.type === 'HYPNO_TOWER') {
+                    target.isConverted = true;
+                    const enemyIndex = enemies.indexOf(target);
+                    if (enemyIndex > -1) {
+                        enemies.splice(enemyIndex, 1);
+                        convertedZombies.push(target);
+                        logMessage('Зомбі перейшов на наш бік!', 'success');
+                    }
+                    return;
+                }
+
+                const finalDamage = this.damage * this.damageMultiplier;
+
+                if (this.type === 'TESLA') {
+                    this.shootTesla(target, finalDamage);
+                } else {
+                    projectiles.push(new Projectile(this.x, this.y, target, finalDamage, this.type));
+                }
+            }
+            
+            shootFlamethrower() {
+                const def = TOWER_DEFINITIONS.FLAMETHROWER;
+                const target = this.findTarget();
+                if (!target) return;
+                
+                this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+                const angleToTarget = Math.atan2(target.y - this.y, target.x - this.x);
+                let highestPathIndex = -1;
+
+                for (const enemy of enemies) {
+                    if (enemy.isGold) continue;
+                    const dx = enemy.x - this.x;
+                    const dy = enemy.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance <= this.range) {
+                        const angleDiff = Math.abs(angleToTarget - Math.atan2(dy, dx));
+                        if (angleDiff < Math.PI / 4 || angleDiff > Math.PI * 7/4) {
+                            enemy.dotDamage = this.damage * this.damageMultiplier;
+                            enemy.dotTimer = def.dotDuration;
+                        }
+                    }
+                }
+            }
+
+            shootPoisonCone() {
+                const def = TOWER_DEFINITIONS.POISON_SPRAYER;
+                const target = this.findTarget(); // Знайти головну ціль для прицілювання
+                if (!target) return;
+                
+                this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+                const angleToTarget = this.angle;
+
+                for (const enemy of enemies) {
+                    if (enemy.isGold) continue;
+                    const dx = enemy.x - this.x;
+                    const dy = enemy.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance <= this.range) {
+                        // Перевірка, чи ворог у конусі (наприклад, PI/6 = 30 градусів, по 15 з кожного боку)
+                        const angleToEnemy = Math.atan2(dy, dx);
+                        let angleDiff = Math.abs(angleToTarget - angleToEnemy);
+                        
+                        // Обробка "переходу" через 360/0 градусів
+                        if (angleDiff > Math.PI) {
+                            angleDiff = 2 * Math.PI - angleDiff;
+                        }
+
+                        if (angleDiff < Math.PI / 6) { // Ширина конуса
+                            // Застосувати накопичувану отруту
+                            enemy.poisonDamage += this.damage * this.damageMultiplier * enemy.damageTakenMultiplier;
+                            enemy.poisonDuration = def.poisonDuration;
+                        }
+                    }
+                }
+            }
+
+            shootTesla(startTarget, damage) {
+                projectiles.push(new Projectile(this.x, this.y, startTarget, damage, this.type));
+                
+                let currentTarget = startTarget;
+                const hitEnemies = [startTarget];
+                
+                for (let i = 0; i < this.chainTargets; i++) {
+                    let nextTarget = null;
+                    let closestDistance = Infinity;
+
+                    for (const enemy of enemies) {
+                        if (enemy.isGold) continue;
+                        if (!hitEnemies.includes(enemy)) {
+                            const dx = enemy.x - currentTarget.x;
+                            const dy = enemy.y - currentTarget.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < 60 && distance < closestDistance) { 
+                                closestDistance = distance;
+                                nextTarget = enemy;
+                            }
+                        }
+                    }
+
+                    if (nextTarget) {
+                        projectiles.push(new Projectile(currentTarget.x, currentTarget.y, nextTarget, damage, 'TESLA_CHAIN'));
+                        hitEnemies.push(nextTarget);
+                        currentTarget = nextTarget;
+                    } else {
+                        break; 
+                    }
+                }
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, target, damage, type, options = {}) {
+                this.x = x;
+                this.y = y;
+                this.target = target;
+                this.damage = damage;
+                this.type = type;
+                
+                this.instakillChance = options.instakillChance || 0;
+
+                const def = TOWER_DEFINITIONS[type] || {};
+                this.speed = type === 'SNIPER' || type === 'RAILGUN' ? 20 : (type === 'DRONE_SHOT' ? 10 : 8);
+                this.size = type === 'SNIPER' ? 3 : (type === 'DRONE_SHOT' ? 3 : 5);
+                this.slowDuration = type === 'SLOW' ? def.slowDuration : 0;
+                this.aoeRadius = def.aoeRadius || 0;
+                this.stunDuration = def.stunDuration || 0;
+
+                if (type === 'RAILGUN') {
+                    this.hitEnemies = [];
+                    const angle = Math.atan2(target.y - y, target.x - x);
+                    this.dx = Math.cos(angle);
+                    this.dy = Math.sin(angle);
+                }
+            }
+
+            draw() {
+                if (this.type === 'ORBITAL_STRIKE') {
+                    ctx.fillStyle = '#f59e0b88';
+                    ctx.fillRect(this.target.x - 10, 0, 20, CANVAS_HEIGHT);
+                    return;
+                }
+                ctx.fillStyle = this.type === 'TESLA' || this.type === 'TESLA_CHAIN' ? '#0d6efd' : 
+                                this.type === 'SLOW' ? '#8cb4ff' : 
+                                this.type === 'EMP' ? '#d63384' :
+                                this.type === 'RAILGUN' ? '#0dcaf0' :
+                                this.type === 'DRONE_SHOT' ? '#ffc107' :
+                                this.type === 'SINGULARITY' ? '#4c0519' :
+                                '#ffc107';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.type === 'SINGULARITY' ? 10 : this.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (this.type === 'RAILGUN') {
+                    ctx.strokeStyle = '#0dcaf0aa';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x - this.dx * 30, this.y - this.dy * 30);
+                    ctx.lineTo(this.x, this.y);
+                    ctx.stroke();
+                }
+            }
+
+            update() {
+                if (this.type === 'RAILGUN') {
+                    this.x += this.dx * this.speed;
+                    this.y += this.dy * this.speed;
+
+                    for (const enemy of enemies) {
+                        if (enemy.isGold) continue;
+                        if (!this.hitEnemies.includes(enemy)) {
+                            const dist = Math.sqrt(Math.pow(enemy.x - this.x, 2) + Math.pow(enemy.y - this.y, 2));
+                            if (dist < enemy.size) {
+                                enemy.health -= this.damage;
+                                this.hitEnemies.push(enemy);
+                            }
+                        }
+                    }
+                    return (this.x < -30 || this.x > CANVAS_WIDTH + 30 || this.y < -30 || this.y > CANVAS_HEIGHT + 30);
+                }
+                
+                if (this.type === 'ORBITAL_STRIKE') {
+                    this.target.health -= this.damage;
+                    this.applyAoe();
+                    return true;
+                }
+
+                if (!this.target || this.target.health <= 0 || this.target.isGold) return true; 
+                
+                const dx = this.target.x - this.x;
+                const dy = this.target.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < this.speed) {
+                    
+                    this.target.health -= this.damage * this.target.damageTakenMultiplier;
+                    this.applyAoe();
+                    return true; 
+                } else {
+                    this.x += (dx / distance) * this.speed;
+                    this.y += (dy / distance) * this.speed;
+                    return false; 
+                }
+            }
+
+            applyAoe() {
+                if (this.slowDuration > 0) {
+                    this.target.slowTimer = this.slowDuration;
+                    this.target.slowFactor = TOWER_DEFINITIONS.SLOW.slowFactor;
+                }
+
+                if (this.aoeRadius > 0) {
+                    enemies.forEach(enemy => {
+                        if (enemy === this.target || enemy.isGold) return;
+                        const dist = Math.sqrt(Math.pow(enemy.x - this.target.x, 2) + Math.pow(enemy.y - this.target.y, 2));
+                        if (dist < this.aoeRadius) {
+                            if (this.stunDuration > 0) {
+                                enemy.stunTimer = this.stunDuration;
+                            }
+                             enemy.health -= this.damage * (this.type === 'GATLING' ? 0.5 : 1) * enemy.damageTakenMultiplier; 
+                        }
+                    });
+                    if (this.stunDuration > 0) this.target.stunTimer = this.stunDuration;
+                }
+            }
+        }
+
+        class OrbitalProjectile {
+            constructor(tower) {
+                this.tower = tower;
+                this.radius = tower.orbitalRadius;
+                this.speed = TOWER_DEFINITIONS.BLADE_VORTEX.orbitalSpeed;
+                this.damage = tower.damage;
+                this.angle = 0;
+                this.x = this.tower.x + this.radius * Math.cos(this.angle);
+                this.y = this.tower.y + this.radius * Math.sin(this.angle);
+                this.size = 8;
+                this.hitCooldown = 30;
+                this.hitEnemies = new Map();
+            }
+
+            update() {
+                for (const [enemy, timer] of this.hitEnemies.entries()) {
+                    if (timer > 0) {
+                        this.hitEnemies.set(enemy, timer - 1);
+                    } else {
+                        this.hitEnemies.delete(enemy);
+                    }
+                }
+
+                this.angle += this.speed;
+                if (this.angle > Math.PI * 2) {
+                    this.angle -= Math.PI * 2;
+                }
+                this.x = this.tower.x + this.radius * Math.cos(this.angle);
+                this.y = this.tower.y + this.radius * Math.sin(this.angle);
+                this.damage = this.tower.damage * this.tower.damageMultiplier;
+                this.radius = this.tower.orbitalRadius;
+
+                for (const enemy of enemies) {
+                    if (enemy.isGold) continue;
+                    if (!this.hitEnemies.has(enemy)) {
+                        const dx = this.x - enemy.x;
+                        const dy = this.y - enemy.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < this.size + enemy.size) {
+                            enemy.health -= this.damage * enemy.damageTakenMultiplier;
+                            this.hitEnemies.set(enemy, this.hitCooldown);
+                        }
+                    }
+                }
+            }
+
+            draw() {
+                // Draw chain
+                ctx.strokeStyle = '#6c757d';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(this.tower.x, this.tower.y);
+                ctx.lineTo(this.x, this.y);
+                ctx.stroke();
+                
+                // Draw mace head
+                ctx.fillStyle = this.tower.color; // Use tower color
+                ctx.strokeStyle = '#1a1a1a';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Draw spikes on mace
+                for (let i = 0; i < 8; i++) {
+                    const angle = i * Math.PI / 4 + this.angle * 5; // Make spikes rotate
+                    const startX = this.x + this.size * Math.cos(angle);
+                    const startY = this.y + this.size * Math.sin(angle);
+                    const endX = this.x + (this.size + 4) * Math.cos(angle);
+                    const endY = this.y + (this.size + 4) * Math.sin(angle);
+                    ctx.beginPath();
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // --- Функції Рендерингу ---
+
+        function drawGrid() {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 0.5;
+
+            for (let x = 0; x <= CANVAS_WIDTH; x += TILE_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, CANVAS_HEIGHT);
+                ctx.stroke();
+            }
+
+            for (let y = 0; y <= CANVAS_HEIGHT; y += TILE_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(CANVAS_WIDTH, y);
+                ctx.stroke();
+            }
+        }
+
+        function drawPlacementPreview() {
+            if (!isPlacingTower || mousePos.x < 0) return;
+
+            const gridX = Math.floor(mousePos.x / TILE_SIZE);
+            const gridY = Math.floor(mousePos.y / TILE_SIZE);
+
+            const centerX = gridX * TILE_SIZE + TILE_SIZE / 2;
+            const centerY = gridY * TILE_SIZE + TILE_SIZE / 2;
+            
+            const def = TOWER_DEFINITIONS[currentTowerTypeToPlace];
+
+            let canPlace = true;
+            if (currentTowerTypeToPlace !== 'SPIKE_TRAP' && isOnPath(centerX, centerY)) canPlace = false;
+            if (currentTowerTypeToPlace === 'SPIKE_TRAP' && !isOnPath(centerX, centerY)) canPlace = false;
+
+            for (const tower of towers) {
+                const towerGridX = Math.floor((tower.x - TILE_SIZE / 2) / TILE_SIZE);
+                const towerGridY = Math.floor((tower.y - TILE_SIZE / 2) / TILE_SIZE);
+                if (gridX === towerGridX && gridY === towerGridY) {
+                    canPlace = false;
+                    break;
+                }
+            }
+            
+            ctx.save();
+            // Draw range preview
+            ctx.globalAlpha = 0.3;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, def.range, 0, Math.PI * 2);
+            ctx.fillStyle = canPlace ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+            
+            // Draw a temporary tower for preview
+            ctx.globalAlpha = 0.6;
+            const tempTower = new Tower(gridX, gridY, currentTowerTypeToPlace);
+            tempTower.draw();
+            ctx.globalAlpha = 1.0;
+            
+            ctx.restore();
+        }
+
+        function drawPath() {
+            ctx.lineWidth = TILE_SIZE; 
+            ctx.strokeStyle = '#495057'; 
+            ctx.beginPath();
+            ctx.moveTo(0, path[0].y * TILE_SIZE + TILE_SIZE / 2); 
+            path.forEach(p => ctx.lineTo(p.x * TILE_SIZE + TILE_SIZE / 2, p.y * TILE_SIZE + TILE_SIZE / 2));
+            ctx.stroke();
+
+            ctx.lineWidth = 3; 
+            ctx.strokeStyle = '#adb5bd'; 
+            ctx.setLineDash([15, 15]);
+            ctx.beginPath();
+            ctx.moveTo(0, path[0].y * TILE_SIZE + TILE_SIZE / 2);
+            path.forEach(p => ctx.lineTo(p.x * TILE_SIZE + TILE_SIZE / 2, p.y * TILE_SIZE + TILE_SIZE / 2));
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+
+            const finishX = path[path.length - 1].x * TILE_SIZE + TILE_SIZE / 2;
+            const finishY = path[path.length - 1].y * TILE_SIZE + TILE_SIZE / 2;
+            ctx.fillStyle = '#343a40'; 
+            ctx.fillRect(finishX - TILE_SIZE, finishY - TILE_SIZE, TILE_SIZE*2, TILE_SIZE*2);
+        }
+        
+        function draw() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); 
+            drawPath();
+            drawGrid();
+            towers.forEach(t => t.draw());
+            drones.forEach(d => d.draw());
+            convertedZombies.forEach(c => c.draw());
+            enemies.forEach(e => e.draw());
+            projectiles.forEach(p => p.draw());
+            orbitalProjectiles.forEach(o => o.draw());
+            drawPlacementPreview();
+        }
+        
+        function handleUpgradeTower() {
+            if (!selectedTower || isGameOver) return;
+            const tower = selectedTower;
+            const costMultiplier = tower.totalCost > 500000 ? 100 : 1;
+            const upgradeCost = UPGRADE_COST_BASE * tower.level * costMultiplier;
+
+            if (tower.level >= MAX_TOWER_LEVEL) {
+                showModal("Покращення неможливе", "Турель вже має максимальний рівень.");
+                return;
+            }
+            if (gold < upgradeCost) {
+                showModal("Недостатньо Ресурсів", `Для покращення потрібно ${upgradeCost} ресурсів.`);
+                return;
+            }
+
+            if (tower.upgrade(upgradeCost)) {
+                gold -= upgradeCost;
+                logMessage(`Турель ${tower.name} покращена до Рівня ${tower.level}.`, 'success');
+                updateUI();
+            }
+        }
+        
+        function handleSellTower() {
+            if (!selectedTower || isGameOver) return;
+            
+            const towerToSell = selectedTower;
+            const refund = Math.floor(towerToSell.totalCost * SELL_REFUND_PERCENTAGE);
+            
+            gold += refund;
+
+            if (towerToSell.type === 'BLADE_VORTEX') {
+                const orbitalIndex = orbitalProjectiles.findIndex(op => op.tower === towerToSell);
+                if (orbitalIndex > -1) {
+                    orbitalProjectiles.splice(orbitalIndex, 1);
+                }
+            }
+            if (towerToSell.type === 'ROBOT_FACTORY') {
+                towerToSell.despawnDrones();
+            }
+            
+            const index = towers.indexOf(towerToSell);
+            if (index > -1) {
+                towers.splice(index, 1);
+            }
+            
+            logMessage(`Турель ${towerToSell.name} продана за ${refund} ресурсів.`, 'warning');
+            
+            selectedTower = null;
+            updateUI();
+        }
+
+        function handleEndOfWaveIncome() {
+            const incomeTowers = towers.filter(t => t.type === 'MINE' || t.type === 'ECONOMIC_NEXUS');
+            if (incomeTowers.length > 0) {
+                let totalIncome = 0;
+                incomeTowers.forEach(mine => {
+                    totalIncome += mine.income;
+                });
+                gold += totalIncome;
+                logMessage(`Шахти принесли +${totalIncome} ресурсів за хвилю.`, 'income');
+            }
+        }
+
+        function applyGlobalBuffsAndDebuffs() {
+            // Скидання всіх бафів/дебафів
+            towers.forEach(t => { 
+                t.damageMultiplier = 1.0; 
+                t.cooldownMultiplier = 1.0;
+            });
+            enemies.forEach(e => {
+                e.damageTakenMultiplier = 1.0;
+                e.shrinkFactor = 1.0;
+            });
+
+            // Застосування бафів та дебафів від відповідних веж
+            for (const tower of towers) {
+                switch(tower.type) {
+                    case 'SUPPORT':
+                        for (const targetTower of towers) {
+                            if (tower === targetTower || targetTower.damage === 0) continue;
+                            const dist = Math.sqrt(Math.pow(tower.x - targetTower.x, 2) + Math.pow(tower.y - targetTower.y, 2));
+                            if (dist <= tower.range) {
+                                targetTower.damageMultiplier *= TOWER_DEFINITIONS.SUPPORT.damageBoost + ((tower.level - 1) * 0.02);
+                            }
+                        }
+                        break;
+                    case 'CHRONO_BOOSTER':
+                         for (const targetTower of towers) {
+                            if (tower === targetTower || targetTower.cooldown === 0) continue;
+                            const dist = Math.sqrt(Math.pow(tower.x - targetTower.x, 2) + Math.pow(tower.y - targetTower.y, 2));
+                            if (dist <= tower.range) {
+                                targetTower.cooldownMultiplier *= tower.cooldownReduction;
+                            }
+                        }
+                        break;
+                    case 'SHRINK_RAY':
+                        for (const enemy of enemies) {
+                            if (enemy.isGold) continue;
+                            const dist = Math.sqrt(Math.pow(tower.x - enemy.x, 2) + Math.pow(tower.y - enemy.y, 2));
+                            if (dist <= tower.range) {
+                                enemy.shrinkFactor = Math.min(enemy.shrinkFactor, tower.shrinkFactor);
+                            }
+                        }
+                        break;
+                    case 'VULNERABILITY_BEACON':
+                        for (const enemy of enemies) {
+                            if (enemy.isGold) continue;
+                            const dist = Math.sqrt(Math.pow(tower.x - enemy.x, 2) + Math.pow(tower.y - enemy.y, 2));
+                            if (dist <= tower.range) {
+                                enemy.damageTakenMultiplier *= tower.damageAmplification;
+                            }
+                        }
+                        break;
+                }
+            }
+        }
+
+        // --- Основна Логіка Гри ---
+        function update() {
+            if (isGameOver) return;
+
+            applyGlobalBuffsAndDebuffs();
+
+            for (let i = orbitalProjectiles.length - 1; i >= 0; i--) {
+                orbitalProjectiles[i].update();
+            }
+            
+            for (let i = drones.length - 1; i >= 0; i--) {
+                drones[i].update();
+            }
+
+            for (let i = convertedZombies.length - 1; i >= 0; i--) {
+                const cZombie = convertedZombies[i];
+                // ... health check ...
+                if (cZombie.health <= 0) {
+                    convertedZombies.splice(i, 1);
+                    continue;
+                }
+
+                // Перевірка, чи ціль ще жива
+                if (cZombie.engagedEnemy && cZombie.engagedEnemy.health <= 0) {
+                    cZombie.engagedEnemy = null;
+                }
+
+                // Пошук нової цілі, якщо не зайнятий
+                if (!cZombie.engagedEnemy) {
+                    let nearestEnemy = null;
+                    let minDistance = 150; // Дальність пошуку
+                    for (const enemy of enemies) {
+                        if (enemy.isGold) continue;
+                        const dx = enemy.x - cZombie.x;
+                        const dy = enemy.y - cZombie.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            nearestEnemy = enemy;
+                        }
+                    }
+                    cZombie.engagedEnemy = nearestEnemy;
+                }
+                
+                // Дія на основі стану
+                if (cZombie.engagedEnemy) {
+                    const target = cZombie.engagedEnemy;
+                    const dx = target.x - cZombie.x;
+                    const dy = target.y - cZombie.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < (cZombie.size * cZombie.shrinkFactor) + (target.size * target.shrinkFactor) + 5) {
+                        // В зоні атаки
+                        if (cZombie.attackCooldown > 0) {
+                            cZombie.attackCooldown--;
+                        } else {
+                            target.health -= cZombie.damage;
+                            cZombie.attackCooldown = cZombie.maxAttackCooldown;
+                        }
+                    } else {
+                        // Рух до цілі
+                        cZombie.x += (dx / distance) * (cZombie.speed * 0.8);
+                        cZombie.y += (dy / distance) * (cZombie.speed * 0.8);
+                    }
+                } else {
+                    cZombie.moveAlongPath();
+                }
+            }
+
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                enemy.update();
+
+                if (enemy.pathIndex >= path.length) {
+                    lives--;
+                    enemies.splice(i, 1); 
+                    logMessage('Зомбі прорвався! Цілісність бази -1.', 'error');
+                } else if (enemy.health <= 0 && !enemy.isGold) { // Не видаляти золотих, поки хвиля не закінчиться
+                    gold += enemy.goldValue;
+                    
+                    if (enemy.isBoss) {
+                        logMessage(`🔥 БОС ЗНИЩЕНИЙ! +${enemy.goldValue} ресурсів!`, 'boss');
+                    }
+                    enemies.splice(i, 1); 
+                }
+            }
+
+            towers.forEach(t => t.update());
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                if (projectiles[i].update()) {
+                    projectiles.splice(i, 1);
+                }
+            }
+
+            if (lives <= 0) {
+                isGameOver = true;
+                showModal("Повний Зомбі-Апокаліпсис!", `Вашу базу знищено. Ви протримались до Хвилі ${wave}.`, () => initGame());
+            }
+
+            const activeEnemies = enemies.filter(e => !e.isGold);
+            if (isWaveActive && activeEnemies.length === 0) {
+                isWaveActive = false;
+                logMessage(`Хвиля ${wave} відбита!`, 'warning');
+
+                // Зібрати золото зі статуй
+                let bonusGold = 0;
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    if (enemies[i].isGold) {
+                        bonusGold += enemies[i].goldValue * 2; // 200% бонус
+                        enemies.splice(i, 1); // Видалити статую
+                    }
+                }
+                if (bonusGold > 0) {
+                    gold += bonusGold;
+                    logMessage(`Золоті статуї зібрано! +${bonusGold} ресурсів!`, 'income');
+                }
+                
+                handleEndOfWaveIncome();
+                gold += 50 + (wave % BOSS_WAVE_INTERVAL === 0 ? 100 : 0); 
+                convertedZombies.length = 0;
+                updateUI();
+            }
+            updateUI();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function handleSelectTowerType(type) {
+             const def = TOWER_DEFINITIONS[type];
+            if (gold < def.cost) {
+                showModal("Дія неможлива", `Недостатньо ресурсів. Потрібно ${def.cost} для ${def.name}.`);
+                isPlacingTower = false;
+                selectedTower = null;
+                updateUI();
+                return;
+            }
+            
+            selectedTower = null;
+            
+            if (isPlacingTower && currentTowerTypeToPlace === type) {
+                isPlacingTower = false;
+                logMessage(`Розгортання ${def.name} скасовано.`, 'info');
+            } else {
+                currentTowerTypeToPlace = type;
+                isPlacingTower = true;
+                logMessage(`Режим розгортання: виберіть позицію для ${def.name}.`, 'info');
+            }
+            updateUI();
+        }
+
+        function isOnPath(px, py) {
+            const clearance = TILE_SIZE * 0.8; 
+
+            for (let i = 0; i < path.length - 1; i++) {
+                const p1x = path[i].x * TILE_SIZE + TILE_SIZE / 2;
+                const p1y = path[i].y * TILE_SIZE + TILE_SIZE / 2;
+                const p2x = path[i+1].x * TILE_SIZE + TILE_SIZE / 2;
+                const p2y = path[i+1].y * TILE_SIZE + TILE_SIZE / 2;
+                
+                if (p1x === p2x) {
+                    if (px > p1x - clearance && px < p1x + clearance &&
+                        py > Math.min(p1y, p2y) - clearance && py < Math.max(p1y, p2y) + clearance) {
+                        return true;
+                    }
+                } else if (p1y === p2y) {
+                    if (py > p1y - clearance && py < p1y + clearance &&
+                        px > Math.min(p1x, p2x) - clearance && px < Math.max(p1x, p2x) + clearance) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function placeTowerAt(e) {
+            e.preventDefault(); 
+            if (isGameOver) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            const clickX = (clientX - rect.left) * scaleX;
+            const clickY = (clientY - rect.top) * scaleY;
+            
+            let towerClicked = false;
+
+            for(const tower of towers) {
+                const dx = clickX - tower.x;
+                const dy = clickY - tower.y;
+                if (Math.sqrt(dx * dx + dy * dy) < TILE_SIZE / 2) { 
+                    selectedTower = tower;
+                    isPlacingTower = false;
+                    logMessage(`Турель ${tower.name} вибрана.`, 'info');
+                    towerClicked = true;
+                    break;
+                }
+            }
+            
+            if (towerClicked) {
+                 updateUI();
+                 return;
+            }
+            
+            if (isPlacingTower) {
+                const gridX = Math.floor(clickX / TILE_SIZE);
+                const gridY = Math.floor(clickY / TILE_SIZE);
+                const centerX = gridX * TILE_SIZE + TILE_SIZE / 2;
+                const centerY = gridY * TILE_SIZE + TILE_SIZE / 2;
+
+                const type = currentTowerTypeToPlace;
+                const def = TOWER_DEFINITIONS[type];
+                selectedTower = null;
+                
+                if (type === 'SPIKE_TRAP') {
+                    if (!isOnPath(centerX, centerY)) {
+                        showModal("Розміщення неможливе", "Пастки можна розміщувати тільки на шляху зомбі!");
+                        return;
+                    }
+                } else {
+                    if (isOnPath(centerX, centerY)) {
+                        showModal("Розміщення неможливе", "Не можна будувати на шляху зомбі!");
+                        return;
+                    }
+                }
+                
+                for (const tower of towers) {
+                    const towerGridX = Math.floor((tower.x - TILE_SIZE / 2) / TILE_SIZE);
+                    const towerGridY = Math.floor((tower.y - TILE_SIZE / 2) / TILE_SIZE);
+                    if (gridX === towerGridX && gridY === towerGridY) {
+                        showModal("Розміщення неможливе", "Ця клітинка вже зайнята.");
+                        return;
+                    }
+                }
+                
+                if (gold < def.cost) {
+                    showModal("Недостатньо Ресурсів", `Для побудови ${def.name} потрібно ${def.cost} ресурсів.`);
+                    isPlacingTower = false;
+                    updateUI();
+                    return; 
+                }
+                
+                gold -= def.cost;
+                const newTower = new Tower(gridX, gridY, type);
+                towers.push(newTower);
+                if (newTower.type === 'ROBOT_FACTORY') {
+                    newTower.spawnDrones();
+                }
+                logMessage(`${def.name} розгорнуто! -${def.cost} ресурсів.`, 'success');
+                isPlacingTower = false; 
+            } else {
+                selectedTower = null; 
+            }
+            updateUI();
+        }
+
+        function startWave() {
+            if (isWaveActive || isGameOver || enemies.length > 0) return;
+            if (isPlacingTower) {
+                logMessage("Завершіть розгортання турелі перед початком хвилі!", 'warning');
+                return;
+            }
+            selectedTower = null; 
+            wave++;
+            const isNecroWave = wave % NECROMANCER_WAVE_INTERVAL === 0;
+            const isBossWave = !isNecroWave && (wave % BOSS_WAVE_INTERVAL === 0);
+            isWaveActive = true;
+
+            let logMsg = `Хвиля ${wave} почалась! Зомбі наступають!`;
+            let logType = 'warning';
+            if (isNecroWave) {
+                logMsg = `🚨 НЕКРОМАНТ-БОС! Хвиля ${wave}! 🚨`;
+                logType = 'boss';
+            } else if (isBossWave) {
+                logMsg = `🚨 ЗОМБІ-БОС! Наближається важка техніка! Хвиля ${wave}! 🚨`;
+                logType = 'boss';
+            }
+            logMessage(logMsg, logType);
+            
+            const numEnemies = (isBossWave || isNecroWave) ? 1 : (5 + (wave % BOSS_WAVE_INTERVAL) * 2);
+            let spawnCount = 0;
+
+            const spawner = setInterval(() => {
+                if (spawnCount < numEnemies) {
+                    let enemyToSpawn;
+                    if (isNecroWave) enemyToSpawn = new NecromancerBoss(wave);
+                    else if (isBossWave) enemyToSpawn = new Boss(wave);
+                    else enemyToSpawn = new Enemy(wave);
+                    enemies.push(enemyToSpawn);
+                    spawnCount++;
+                } else {
+                    clearInterval(spawner);
+                }
+            }, (isBossWave || isNecroWave) ? 1000 : 500); 
+
+            updateUI();
+        }
+
+        function resetGame() {
+            gold = 10000000;
+            lives = MAX_LIVES;
+            wave = 0;
+            isWaveActive = false;
+            isGameOver = false;
+            isPlacingTower = false;
+            currentTowerTypeToPlace = 'GAUBITSIA';
+            selectedTower = null; 
+            enemies.length = 0;
+            towers.length = 0;
+            projectiles.length = 0;
+            drones.length = 0;
+            logMessages.length = 0;
+            convertedZombies.length = 0;
+            orbitalProjectiles.length = 0;
+        }
+        
+        function setupPlacementButtons() {
+            placementButtonsContainer.innerHTML = ''; 
+            
+            const supportTowerTypes = ['SUPPORT', 'EMP', 'VULNERABILITY_BEACON', 'CHRONO_BOOSTER', 'SHRINK_RAY', 'HYPNO_TOWER', 'SLOW'];
+            const allTowers = Object.keys(TOWER_DEFINITIONS);
+            
+            const damagingTowers = allTowers.filter(t => !supportTowerTypes.includes(t));
+            const supportTowers = allTowers.filter(t => supportTowerTypes.includes(t));
+
+            damagingTowers.sort((a, b) => TOWER_DEFINITIONS[a].cost - TOWER_DEFINITIONS[b].cost);
+            supportTowers.sort((a, b) => TOWER_DEFINITIONS[a].cost - TOWER_DEFINITIONS[b].cost);
+            
+            const allSortedTowers = [...damagingTowers, ...supportTowers];
+
+            const renderButtons = (types, container) => {
+                 types.forEach(type => {
+                    const def = TOWER_DEFINITIONS[type];
+                    const button = document.createElement('button');
+                    
+                    let colorClass = 'bg-gray-700 btn-dark';
+                    let textColor = 'text-white';
+
+                    if (type === 'GAUBITSIA') { colorClass = 'bg-military-green btn-green'; }
+                    else if (type === 'SNIPER') { colorClass = 'bg-gray-800 btn-dark'; }
+                    else if (type === 'TESLA') { colorClass = 'bg-ui-accent btn-blue'; }
+                    else if (type === 'SLOW') { colorClass = 'bg-cyan-500'; Object.assign(button.style, {'--depth-color': '#0891b2'}); }
+                    else if (type === 'FLAMETHROWER') { colorClass = 'bg-orange-500'; Object.assign(button.style, {'--depth-color': '#b85d10'}); }
+                    else if (type === 'ROCKET_LAUNCHER') { colorClass = 'bg-purple-700'; Object.assign(button.style, {'--depth-color': '#4c2a85'}); }
+                    else if (type === 'GATLING') { colorClass = 'bg-gray-600'; Object.assign(button.style, {'--depth-color': '#374151'}); }
+                    else if (type === 'MORTAR') { colorClass = 'bg-gray-500'; Object.assign(button.style, {'--depth-color': '#4b5563'}); }
+                    else if (type === 'RAILGUN') { colorClass = 'bg-cyan-500'; Object.assign(button.style, {'--depth-color': '#0891b2'}); }
+                    else if (type === 'SUPPORT') { colorClass = 'bg-teal-500'; Object.assign(button.style, {'--depth-color': '#0d9488'}); }
+                    else if (type === 'EMP') { colorClass = 'bg-pink-600'; Object.assign(button.style, {'--depth-color': '#be185d'}); }
+                    else if (type === 'SPIKE_TRAP') { colorClass = 'bg-military-metal'; Object.assign(button.style, {'--depth-color': '#52585b'}); }
+                    else if (type === 'SINGULARITY') { colorClass = 'bg-red-900'; Object.assign(button.style, {'--depth-color': '#4c0519'}); }
+                    else if (type === 'CRYO_GENERATOR') { colorClass = 'bg-cyan-200'; textColor = 'text-black'; Object.assign(button.style, {'--depth-color': '#a5f3fc'}); }
+                    else if (type === 'ORBITAL_STRIKE') { colorClass = 'bg-amber-500'; Object.assign(button.style, {'--depth-color': '#f59e0b'}); }
+                    else if (type === 'GRENADE_LAUNCHER') { colorClass = 'bg-amber-800'; Object.assign(button.style, {'--depth-color': '#78350f'}); }
+                    else if (type === 'VULNERABILITY_BEACON') { colorClass = 'bg-yellow-400'; textColor = 'text-black'; Object.assign(button.style, {'--depth-color': '#ca8a04'}); }
+                    else if (type === 'ALCHEMIST') { colorClass = 'bg-yellow-500'; textColor = 'text-black'; Object.assign(button.style, {'--depth-color': '#d97706'}); }
+                    else if (type === 'CHRONO_BOOSTER') { colorClass = 'bg-blue-500'; Object.assign(button.style, {'--depth-color': '#2563eb'}); }
+                    else if (type === 'BALLISTA') { colorClass = 'bg-yellow-800'; Object.assign(button.style, {'--depth-color': '#713f12'}); }
+                    else if (type === 'POISON_SPRAYER') { colorClass = 'bg-green-500'; Object.assign(button.style, {'--depth-color': '#16a34a'}); }
+                    else if (type === 'BLADE_VORTEX') { colorClass = 'bg-purple-600'; Object.assign(button.style, {'--depth-color': '#7e22ce'}); }
+                    else if (type === 'SHRINK_RAY') { colorClass = 'bg-emerald-500'; Object.assign(button.style, {'--depth-color': '#059669'}); }
+                    else if (type === 'HYPNO_TOWER') { colorClass = 'bg-pink-500'; Object.assign(button.style, {'--depth-color': '#db2777'}); }
+                    else if (type === 'ROBOT_FACTORY') { colorClass = 'bg-gray-400'; textColor = 'text-black'; Object.assign(button.style, {'--depth-color': '#9ca3af'}); }
+                    
+                    button.id = `place-${type.toLowerCase()}-btn`;
+                    button.className = `action-button ${colorClass} text-white py-2 px-1 rounded-md font-bold flex flex-col items-center justify-center text-center text-xs`;
+                    button.setAttribute('data-tower-type', type);
+
+                    const nameTextColorClass = (textColor === 'text-black') ? 'text-gray-900/80' : 'text-white';
+                    
+                    let costDisplay = def.cost;
+                    if (def.cost >= 1000000) {
+                        costDisplay = (def.cost / 1000000).toFixed(1) + 'M';
+                    } else if (def.cost >= 1000) {
+                        costDisplay = (def.cost / 1000).toFixed(0) + 'K';
+                    }
+
+
+                    button.innerHTML = `
+                        <canvas id="icon-${type.toLowerCase()}" width="32" height="32" class="mx-auto mb-1 tower-icon-canvas"></canvas>
+                        <span class="text-sm ${nameTextColorClass}">${def.name}</span>
+                        <span class="text-xs font-normal text-military-text/90 ${textColor === 'text-black' ? 'text-gray-900/80' : 'text-resource-yellow/90'} mt-1">
+                            ${costDisplay}
+                        </span>
+                    `;
+                    
+                    button.addEventListener('click', () => handleSelectTowerType(type));
+                    
+                    container.appendChild(button);
+                });
+            };
+            
+            renderButtons(damagingTowers, placementButtonsContainer);
+            
+            const breaker = document.createElement('div');
+            breaker.className = 'col-span-full h-1';
+            placementButtonsContainer.appendChild(breaker);
+            
+            renderButtons(supportTowers, placementButtonsContainer);
+
+            // Затримка для того, щоб DOM встиг оновитись перед малюванням на канвасах
+            setTimeout(() => {
+                allSortedTowers.forEach(type => {
+                    const canvas = document.getElementById(`icon-${type.toLowerCase()}`);
+                    if (canvas) {
+                        drawTowerIcon(canvas, type);
+                    }
+                });
+            }, 0);
+        }
+
+        function drawTowerIcon(canvas, type) {
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const def = TOWER_DEFINITIONS[type];
+            const size = canvas.width;
+            const radius = size / 3;
+
+            ctx.clearRect(0, 0, size, size);
+            ctx.save();
+            ctx.translate(size / 2, size / 2);
+
+            ctx.fillStyle = def.color;
+            ctx.strokeStyle = '#1a1a1a';
+            ctx.lineWidth = 1;
+
+            switch(type) {
+                case 'GAUBITSIA':
+                    ctx.fillStyle = '#343a40';
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) { ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3)); }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius * 0.9, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.fillRect(0, -radius*0.4, radius * 1.5, radius*0.8);
+                    ctx.fillStyle = '#212529'; ctx.fillRect(radius*1.5, -radius*0.5, radius*0.3, radius*1.0);
+                    break;
+                case 'SNIPER':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillRect(0, -1, radius * 2.5, 2);
+                    break;
+                case 'TESLA':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(0, 0); const angle = Math.random() * Math.PI * 2; const dist = radius; ctx.lineTo(dist * Math.cos(angle), dist * Math.sin(angle)); ctx.stroke(); }
+                    break;
+                case 'SLOW':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.moveTo(0, -radius); ctx.lineTo(radius*0.7, 0); ctx.lineTo(0, radius); ctx.lineTo(-radius*0.7, 0); ctx.closePath(); ctx.fill();
+                    break;
+                case 'FLAMETHROWER':
+                    ctx.fillStyle = '#495057';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = def.color;
+                    ctx.fillRect(-radius*0.8, -radius*0.8, radius*0.6, radius*1.6);
+                    ctx.fillRect(radius*0.2, -radius*0.8, radius*0.6, radius*1.6);
+                    ctx.fillStyle = '#212529';
+                    ctx.beginPath();
+                    ctx.moveTo(radius*0.4, -radius*0.4);
+                    ctx.lineTo(radius * 1.6, -radius*0.5);
+                    ctx.lineTo(radius * 1.6, radius*0.5);
+                    ctx.lineTo(radius*0.4, radius*0.4);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.fillStyle = 'rgba(255, 220, 0, 0.9)';
+                    ctx.beginPath();
+                    ctx.arc(radius*1.65, 0, 2, 0, Math.PI*2);
+                    ctx.fill();
+                    break;
+                case 'ROCKET_LAUNCHER':
+                    ctx.fillStyle = '#343a40'; ctx.beginPath(); ctx.arc(0, 0, radius * 1.1, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = def.color;
+                    ctx.save();
+                    ctx.rotate(-Math.PI / 12);
+                    ctx.fillRect(0, -radius*0.6, radius * 2.5, radius*1.2);
+                    ctx.fillStyle = '#dc3545';
+                    ctx.beginPath(); ctx.moveTo(radius * 2.5, 0); ctx.lineTo(radius * 2.2, -radius*0.4); ctx.lineTo(radius * 2.2, radius*0.4); ctx.closePath(); ctx.fill();
+                    ctx.restore();
+                    break;
+                case 'GATLING':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(radius*0.5, 0, radius*0.8, -Math.PI/2, Math.PI/2); ctx.fill();
+                    for(let i = -1; i <= 1; i++){ if(i === 0) continue; const yOffset = i * 2; ctx.fillStyle = '#212529'; ctx.fillRect(radius * 0.5, yOffset - 0.5, radius * 1.2, 1); }
+                    break;
+                case 'MORTAR':
+                    ctx.fillStyle = '#343a40';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#6c757d';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 0.9, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.save();
+                    ctx.rotate(-Math.PI / 3);
+                    ctx.fillStyle = def.color;
+                    ctx.fillRect(0, -radius*0.4, radius*2, radius*0.8);
+                    ctx.fillStyle = '#212529';
+                    ctx.fillRect(radius*0.5, -radius*0.5, 2, radius);
+                    ctx.fillRect(radius*1.2, -radius*0.5, 2, radius);
+                    ctx.restore();
+                    break;
+                case 'RAILGUN':
+                    ctx.fillStyle = '#343a40'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.fillRect(0, -radius*0.5, radius * 2.5, 2); ctx.fillRect(0, radius*0.5 - 2, radius * 2.5, 2);
+                    break;
+                case 'SUPPORT':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.moveTo(0, -radius*0.8); ctx.lineTo(radius*0.7, 0); ctx.lineTo(0, radius*0.8); ctx.lineTo(-radius*0.7, 0); ctx.closePath(); ctx.fill();
+                    break;
+                case 'EMP':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(0, 0, radius*0.7, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, radius*0.3, 0, Math.PI*2); ctx.fill();
+                    break;
+                case 'SPIKE_TRAP':
+                    // Icon "Капкан"
+                    ctx.fillStyle = '#343a40';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#5a6670';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = def.color;
+                    for(let i=0; i<8; i++) {
+                        const angle = i * (Math.PI*2) / 8;
+                        ctx.beginPath();
+                        ctx.moveTo(radius*0.7 * Math.cos(angle), radius*0.7 * Math.sin(angle));
+                        ctx.lineTo(radius*1.1 * Math.cos(angle), radius*1.1 * Math.sin(angle));
+                        ctx.lineTo(radius*0.7 * Math.cos(angle + 0.3), radius*0.7 * Math.sin(angle + 0.3));
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    break;
+                case 'SINGULARITY':
+                    ctx.fillStyle = '#212529';
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        ctx.lineTo(radius * 1.3 * Math.cos(i * Math.PI / 3), radius * 1.3 * Math.sin(i * Math.PI / 3));
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.strokeStyle = '#6f42c1';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.fillStyle = def.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius*0.5, 0, Math.PI*2);
+                    ctx.fill();
+                    break;
+                case 'CRYO_GENERATOR':
+                    ctx.fillStyle = '#6c757d'; ctx.beginPath(); ctx.arc(0, 0, radius * 1.2, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.moveTo(0, -radius * 0.8); ctx.lineTo(radius * 0.7, 0); ctx.lineTo(0, radius * 0.8); ctx.lineTo(-radius * 0.7, 0); ctx.closePath(); ctx.fill();
+                    break;
+                case 'ORBITAL_STRIKE':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+                    ctx.strokeStyle = def.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, radius, -Math.PI/3, Math.PI/3); ctx.stroke();
+                    break;
+                case 'GRENADE_LAUNCHER':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(0, 0, radius*0.8, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#6c757d'; ctx.fillRect(radius*0.7, -radius*0.25, radius*0.8, radius*0.5);
+                    break;
+                case 'VULNERABILITY_BEACON':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius * 0.5, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.fillRect(-radius*0.2, -radius*0.8, radius*0.4, radius*1.6);
+                    break;
+                case 'CHRONO_BOOSTER':
+                    ctx.fillStyle = '#dee2e6'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+                    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0, -radius*0.7); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(radius*0.5, 0); ctx.stroke();
+                    break;
+                case 'BALLISTA': // Renamed to "Шипомет" icon
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius * 1.1, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#6c757d'; ctx.fillRect(-radius*0.5, -radius*0.8, radius*1.2, radius*1.6);
+                    ctx.fillStyle = def.color;
+                    const barrelYOffsetIcon = radius * 0.4;
+                    ctx.fillRect(0, -barrelYOffsetIcon - 1, radius * 2.2, 2);
+                    ctx.fillRect(0, barrelYOffsetIcon - 1, radius * 2.2, 2);
+                    break;
+                case 'POISON_SPRAYER':
+                    ctx.fillStyle = '#343a40';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#495057';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = def.color;
+                    ctx.fillRect(-radius*0.7, -radius*0.5, radius*0.7, radius*1.0);
+                    ctx.fillStyle = '#212529';
+                    ctx.fillRect(radius*0.5, -radius*0.4, radius, 1);
+                    ctx.fillRect(radius*0.5, -0.5, radius*1.2, 1);
+                    ctx.fillRect(radius*0.5, radius*0.4 - 1, radius, 1);
+                    break;
+                case 'BLADE_VORTEX':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.save(); ctx.rotate(Math.PI/4);
+                    ctx.beginPath(); ctx.arc(radius*0.7, 0, radius/3, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(-radius*0.7, 0, radius/3, 0, Math.PI*2); ctx.fill();
+                    ctx.restore();
+                    break;
+                case 'SHRINK_RAY':
+                    ctx.fillStyle = '#6c757d'; ctx.beginPath(); ctx.arc(0, 0, radius*0.8, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(0, 0, radius*0.6, 0, Math.PI*2); ctx.fill();
+                    break;
+                case 'HYPNO_TOWER':
+                    ctx.fillStyle = '#212529';
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    const gradPulseIcon = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+                    gradPulseIcon.addColorStop(0, '#fff');
+                    gradPulseIcon.addColorStop(0.5, def.color);
+                    gradPulseIcon.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = gradPulseIcon;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 'ROBOT_FACTORY':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.rect(-radius, -radius, radius*2, radius*2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(0, 0, radius * 0.5, 0, Math.PI*2); ctx.fill();
+                    break;
+                case 'ALCHEMIST':
+                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(0, 0, radius * 0.8, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.beginPath(); ctx.arc(0, -radius*0.3, 2, 0, Math.PI*2); ctx.fill();
+                    break;
+                default:
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+            }
+            ctx.restore();
+        }
+
+        function initGame() {
+            resetGame();
+            logMessage("Системи готові. Побудуйте оборону.", 'info');
+            setupPlacementButtons(); 
+
+            startWaveBtn.addEventListener('click', startWave);
+            upgradeTowerBtn.addEventListener('click', handleUpgradeTower);
+            sellTowerBtn.addEventListener('click', handleSellTower);
+            
+            canvas.addEventListener('click', placeTowerAt); 
+            canvas.addEventListener('touchstart', placeTowerAt, { passive: false });
+            
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                mousePos.x = (e.clientX - rect.left) * scaleX;
+                mousePos.y = (e.clientY - rect.top) * scaleY;
+            });
+            
+            canvas.addEventListener('mouseleave', () => {
+                mousePos.x = -1;
+                mousePos.y = -1;
+            });
+
+            gameLoop();
+            updateUI();
+        }
+
+        window.onload = initGame;
+    </script>
+</body>
+</html>
+
+
+
