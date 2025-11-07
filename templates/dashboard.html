@@ -193,7 +193,7 @@
             GAUBITSIA: { name: 'Гаубиця', cost: 250, damage: 27, range: 150, cooldown: 40, color: '#6c757d', upgradeDamage: 7, upgradeCooldown: 2 },
             TESLA: { name: 'Тесла', cost: 350, damage: 8, range: 100, cooldown: 10, color: '#0d6efd', chainTargets: 2, upgradeDamage: 2, upgradeCooldown: 0 },
             SNIPER: { name: 'Снайпер', cost: 400, damage: 150, range: 300, cooldown: 120, color: '#212529', upgradeDamage: 40, upgradeCooldown: 10 },
-            RAILGUN: { name: 'Рельсотрон', cost: 600, damage: 300, range: 315, cooldown: 300, color: '#0dcaf0', upgradeDamage: 75, upgradeCooldown: 20 },
+            RAILGUN: { name: 'Рельсотрон', cost: 600, damage: 300, range: 200, cooldown: 300, color: '#0dcaf0', upgradeDamage: 75, upgradeCooldown: 20 },
             IRRADIATOR: { name: 'Ірадіатор', cost: 700, damage: 0.2, range: 130, cooldown: 5, color: '#a3e635', radiationDuration: 180, upgradeDamage: 0.1, upgradeCooldown: 0 },
             BLADE_VORTEX: { name: 'Вихор', cost: 800, damage: 10, range: 0, cooldown: 0, color: '#7e22ce', orbitalRadius: 60, orbitalSpeed: 0.05, upgradeDamage: 3, upgradeRadius: 5 },
             ROBOT_FACTORY: { name: 'Фабрика', cost: 4500, damage: 0, range: 0, cooldown: 0, color: '#adb5bd', initialDrones: 1, upgradeDrones: 1, droneDamage: 6, droneRange: 120, droneCooldown: 60, upgradeDroneRange: 10 },
@@ -764,6 +764,7 @@
                 this.color = def.color;
                 this.totalCost = def.cost;
                 this.angle = 0;
+                this.fireAnimationTimer = 0; // <-- ДОДАНО: Таймер для анімації вогню
                 
                 this.income = def.income || 0;
                 this.chainTargets = def.chainTargets || 0;
@@ -979,7 +980,7 @@
 
                         // 4. Ствол (під кутом)
                         ctx.save();
-                        ctx.rotate(-Math.PI / 12); // Невеликий кут вгору
+                        // ctx.rotate(-Math.PI / 12); // Прибрано обертання, щоб ствол був прямим
                         
                         // Казенник
                         ctx.fillStyle = '#6c757d';
@@ -1000,24 +1001,55 @@
                         break;
                     }
                     case 'SNIPER': {
-                        // Base
-                        ctx.fillStyle = '#495057';
+                        // --- НОВИЙ ДИЗАЙН: Високотехнологічна Снайперська Вежа ---
+                        
+                        // 1. Статична база (важка, шестикутна, не обертається)
+                        ctx.save();
+                        ctx.rotate(-this.angle); // Компенсуємо обертання
+                        ctx.fillStyle = '#343a40'; // Дуже темна база
+                        ctx.strokeStyle = '#1a1a1a';
+                        ctx.lineWidth = 2;
                         ctx.beginPath();
-                        ctx.arc(0, 0, radius, 0, Math.PI*2);
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
                         ctx.fill();
                         ctx.stroke();
-                        // Turret body
-                        ctx.fillStyle = this.color;
+                        ctx.restore(); // Повертаємо обертання
+
+                        // 2. Обертова турель (кутова)
+                        ctx.fillStyle = this.color; // #212529
+                        ctx.strokeStyle = '#495057';
+                        ctx.lineWidth = 2;
+                        
+                        // Тіло турелі
                         ctx.beginPath();
-                        ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
+                        ctx.moveTo(radius * 0.8, -radius * 0.6);
+                        ctx.lineTo(radius * 0.8, radius * 0.6);
+                        ctx.lineTo(-radius * 0.7, radius * 0.5);
+                        ctx.lineTo(-radius * 0.7, -radius * 0.5);
+                        ctx.closePath();
                         ctx.fill();
                         ctx.stroke();
-                        // Barrel
-                        ctx.fillRect(0, -2, radius * 2.5, 4);
-                        ctx.strokeRect(0, -2, radius * 2.5, 4);
-                        // Scope
-                        ctx.fillStyle = '#6c757d';
-                        ctx.fillRect(radius*0.5, -5, radius*0.8, 3);
+
+                        // 3. Ствол
+                        ctx.fillStyle = '#6c757d'; // Ствол
+                        ctx.strokeStyle = '#1a1a1a';
+                        ctx.fillRect(0, -radius * 0.2, radius * 3.5, radius * 0.4);
+                        ctx.strokeRect(0, -radius * 0.2, radius * 3.5, radius * 0.4);
+                        
+                        // Дулове гальмо
+                        ctx.fillStyle = '#343a40';
+                        ctx.fillRect(radius * 3.5, -radius * 0.3, radius * 0.5, radius * 0.6);
+
+                        // 4. Оптика (велика)
+                        ctx.fillStyle = '#3b82f6'; // Синя лінза
+                        ctx.fillRect(radius * 0.5, -radius * 0.7, radius, radius * 0.4);
+                        ctx.strokeStyle = '#1a1a1a';
+                        ctx.strokeRect(radius * 0.5, -radius * 0.7, radius, radius * 0.4);
+
+                        // --- КІНЕЦЬ НОВОГО ДИЗАЙНУ ---
                         break;
                     }
                     case 'TESLA': {
@@ -1091,405 +1123,99 @@
                         ctx.globalAlpha = 1.0;
                         break;
                     }
-                    case 'FLAMETHROWER': {
-                        // --- НОВИЙ ДИЗАЙН: Подвійні Баки ---
-                        // База
-                        ctx.fillStyle = '#495057';
+                    case 'MORTAR': {
+                        // --- НОВИЙ ДИЗАЙН: Справжня Мортира ---
+                        
+                        // 1. Статична база (опорна плита + біпод, не обертається)
+                        ctx.save();
+                        ctx.rotate(-this.angle); // Компенсуємо обертання
+                        
+                        // Опорна плита
+                        ctx.fillStyle = '#343a40'; // Темна база
                         ctx.beginPath();
                         ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
                         ctx.fill();
                         ctx.stroke();
-                        // Корпус
-                        ctx.fillStyle = '#343a40';
-                        ctx.fillRect(-radius * 0.5, -radius * 0.8, radius, radius * 1.6);
-                        ctx.strokeRect(-radius * 0.5, -radius * 0.8, radius, radius * 1.6);
-                        // Баки з паливом (з боків)
-                        ctx.fillStyle = this.color;
-                        ctx.fillRect(-radius, -radius * 0.7, radius * 0.5, radius * 1.4); // Лівий бак
-                        ctx.strokeRect(-radius, -radius * 0.7, radius * 0.5, radius * 1.4);
-                        ctx.fillRect(radius * 0.5, -radius * 0.7, radius * 0.5, radius * 1.4); // Правий бак
-                        ctx.strokeRect(radius * 0.5, -radius * 0.7, radius * 0.5, radius * 1.4);
-                        // Сопло
-                        ctx.fillStyle = '#212529';
-                        ctx.fillRect(radius * 0.5, -radius * 0.3, radius * 1.5, radius * 0.6);
-                        ctx.strokeRect(radius * 0.5, -radius * 0.3, radius * 1.5, radius * 0.6);
-                        // Контрольний вогник
-                        ctx.fillStyle = 'rgba(255, 220, 0, 0.9)';
+
+                        // Статичний Біпод (дві ноги "назад" - Bліво)
+                        ctx.strokeStyle = '#6c757d'; // Сірий метал
+                        ctx.lineWidth = 4;
+                        const bipodAngle = Math.PI / 8;
                         ctx.beginPath();
-                        ctx.arc(radius * 2.0, 0, 4, 0, Math.PI*2);
-                        ctx.fill();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(-radius * 1.2 * Math.cos(bipodAngle), -radius * 1.2 * Math.sin(bipodAngle));
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(-radius * 1.2 * Math.cos(bipodAngle), radius * 1.2 * Math.sin(bipodAngle));
+                        ctx.stroke();
+                        
+                        ctx.restore(); // Повертаємо обертання
+
+                        // 2. Обертова частина (лише ствол)
+                        
+                        // 3. Ствол (Тепервказує прямо на ціль)
+                        ctx.save();
+                        // ctx.rotate(-Math.PI / 3); // <-- ВИДАЛЕНО: Цей рядок спричиняв візуальну помилку
+                        
+                        // Ствол (зроблено коротшим і товщим)
+                        ctx.fillStyle = this.color; // #495057
+                        ctx.fillRect(0, -radius * 0.5, radius * 1.8, radius * 1.0);
+                        ctx.strokeRect(0, -radius * 0.5, radius * 1.8, radius * 1.0);
+                        
+                        // Опора ствола
+                        ctx.fillStyle = '#212529';
+                        ctx.fillRect(-radius*0.3, -radius * 0.6, radius * 0.3, radius * 1.2);
+                        
+                        ctx.restore();
                         // --- КІНЕЦЬ НОВОГО ДИЗАЙНУ ---
                         break;
                     }
                     case 'ROCKET_LAUNCHER': {
                         // --- НОВИЙ ДИЗАЙН: Сучасна ракетна установка (ATGM) ---
                         
-                        // 1. Тринога (не обертається)
+                        // 1. Статична тринога (не обертається)
                         ctx.save();
-                        ctx.rotate(-this.angle); // Компенсуємо обертання, щоб тринога була статичною
+                        ctx.rotate(-this.angle); // Компенсуємо обертання
                         ctx.strokeStyle = '#343a40';
-                        ctx.lineWidth = 5;
+                        ctx.lineWidth = 4;
                         for (let i = 0; i < 3; i++) {
-                            const angle = i * (Math.PI * 2 / 3);
+                            const angle = i * (Math.PI * 2 / 3) + Math.PI/2; // Розташування ніг
                             ctx.beginPath();
                             ctx.moveTo(0, 0);
-                            ctx.lineTo(radius * Math.cos(angle), radius * Math.sin(angle));
+                            ctx.lineTo(radius * 1.1 * Math.cos(angle), radius * 1.1 * Math.sin(angle));
                             ctx.stroke();
                         }
                         ctx.restore(); // Повертаємо обертання
 
-                        // 2. Обертова платформа (на тринозі)
+                        // 2. Обертова платформа
                         ctx.fillStyle = '#495057';
                         ctx.beginPath();
                         ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
                         ctx.fill();
                         ctx.stroke();
-
-                        // 3. Пусковий контейнер (коробка) - під кутом
-                        ctx.save();
-                        ctx.rotate(-Math.PI / 12); // Невеликий кут вгору
                         
-                        // Головний корпус пускової (військово-зелений)
-                        ctx.fillStyle = '#4a553a';
-                        ctx.fillRect(0, -radius * 0.5, radius * 2.5, radius);
-                        ctx.strokeRect(0, -radius * 0.5, radius * 2.5, radius);
-
-                        // Отвір
-                        ctx.fillStyle = '#212529';
-                        ctx.fillRect(radius * 2.5, -radius * 0.3, radius * 0.3, radius * 0.6);
-
-                        // 4. Блок оптики
+                        // 3. Блок оптики (збоку)
                         ctx.fillStyle = '#212529';
                         ctx.fillRect(radius * 0.2, -radius, radius * 0.8, radius * 0.4);
                         ctx.strokeRect(radius * 0.2, -radius, radius * 0.8, radius * 0.4);
-                        // Лінза
-                        ctx.fillStyle = '#0dcaf0'; // Блакитна лінза
-                        ctx.beginPath();
-                        ctx.arc(radius * 0.6, -radius * 0.8, radius * 0.1, 0, Math.PI*2);
-                        ctx.fill();
 
-                        ctx.restore();
-                        // --- КІНЕЦЬ НОВОГО ДИЗАЙНУ ---
-                        break;
-                    }
-                    case 'GATLING': {
-                        // Base
-                        ctx.fillStyle = '#495057'; // Darker base
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-
-                        ctx.fillStyle = '#6c757d'; // Turret body
-                        ctx.fillRect(-radius*0.5, -radius*0.7, radius, radius*1.4);
-                        ctx.strokeRect(-radius*0.5, -radius*0.7, radius, radius*1.4);
-
-                        // Barrel housing
-                        ctx.fillStyle = this.color;
-                        ctx.beginPath();
-                        ctx.arc(radius*0.5, 0, radius*0.8, -Math.PI/2, Math.PI/2);
-                        ctx.fill();
-                        ctx.stroke();
-
-                        // Barrels
-                        for(let i = -2; i <= 2; i++){
-                            if(i === 0) continue;
-                            const yOffset = i * 4;
-                            ctx.fillStyle = '#212529';
-                            ctx.fillRect(radius * 0.5, yOffset - 1, radius * 1.2, 2);
-                        }
-                        break;
-                    }
-                    case 'MORTAR': {
-                        // Heavy circular base
-                        ctx.fillStyle = '#343a40';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-                        // Rotating part
-                        ctx.fillStyle = '#6c757d';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius * 0.9, 0, Math.PI*2);
-                        ctx.fill();
-                        ctx.stroke();
-                        // Tube
+                        // 4. Пускова труба (під кутом)
                         ctx.save();
-                        ctx.rotate(-Math.PI / 3); // Angled up
-                        ctx.fillStyle = this.color;
-                        ctx.fillRect(0, -radius*0.4, radius*2, radius*0.8);
-                        ctx.strokeRect(0, -radius*0.4, radius*2, radius*0.8);
-                        // Reinforcement rings on barrel
-                        ctx.fillStyle = '#212529';
-                        ctx.fillRect(radius*0.5, -radius*0.5, 3, radius);
-                        ctx.fillRect(radius*1.2, -radius*0.5, 3, radius);
-                        ctx.restore();
-                        break;
-                    }
-                    case 'RAILGUN': {
-                        // Heavy Base
-                        ctx.fillStyle = '#343a40';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-                        // Capacitor/Body
-                        ctx.fillStyle = '#495057';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius * 0.7, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
+                        ctx.rotate(-Math.PI / 12); // Невеликий кут
+                        ctx.fillStyle = '#4a553a'; // Військово-зелений
+                        ctx.fillRect(0, -radius * 0.5, radius * 2.8, radius);
+                        ctx.strokeRect(0, -radius * 0.5, radius * 2.8, radius);
                         
-                        // The Rails
-                        ctx.fillStyle = this.color;
-                        ctx.fillRect(0, -radius*0.4, radius * 2.8, 4); // Top Rail
-                        ctx.fillRect(0, radius*0.4 - 4, radius * 2.8, 4); // Bottom Rail
-                        
-                        // Glowing parts
-                        ctx.fillStyle = '#fff';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius*0.3, 0, Math.PI*2);
-                        ctx.fill();
-                        // Energy effect between rails
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-                        ctx.lineWidth = 1.5;
-                        ctx.beginPath();
-                        ctx.moveTo(0, 0);
-                        for(let i=0; i < radius * 2.8; i+=4) {
-                            ctx.lineTo(i, (Math.random() - 0.5) * 5);
-                        }
-                        ctx.stroke();
-                        break;
-                    }
-                    case 'SUPPORT': {
-                        // Base
-                        ctx.fillStyle = '#495057';
-                        ctx.beginPath();
-                        for (let i = 0; i < 6; i++) {
-                            ctx.lineTo(radius * 1.1 * Math.cos(i * Math.PI / 3), radius * 1.1 * Math.sin(i * Math.PI / 3));
-                        }
-                        ctx.closePath();
-                        ctx.fill();
-                        ctx.stroke();
-                        // Central crystal
-                        ctx.fillStyle = this.color;
-                        ctx.beginPath();
-                        ctx.moveTo(0, -radius*0.8);
-                        ctx.lineTo(radius*0.7, 0);
-                        ctx.lineTo(0, radius*0.8);
-                        ctx.lineTo(-radius*0.7, 0);
-                        ctx.closePath();
-                        ctx.fill();
-                        // Pulsing effect
-                        ctx.globalAlpha = Math.abs(Math.sin(Date.now() / 300));
-                        ctx.strokeStyle = this.color;
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        ctx.arc(0,0, radius*1.2, 0, Math.PI*2);
-                        ctx.stroke();
-                        ctx.globalAlpha = 1.0;
-                        break;
-                    }
-                    case 'EMP': {
-                        // Base
-                        ctx.fillStyle = '#495057';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius, 0, Math.PI*2);
-                        ctx.fill();
-                        ctx.stroke();
-                        // Prongs holding the sphere
-                        ctx.strokeStyle = '#6c757d';
-                        ctx.lineWidth = 4;
-                        for(let i=0; i<4; i++){
-                            ctx.beginPath();
-                            ctx.moveTo(0,0);
-                            ctx.lineTo(radius * Math.cos(i*Math.PI/2 + Math.PI/4), radius * Math.sin(i*Math.PI/2 + Math.PI/4));
-                            ctx.stroke();
-                        }
-                        // Sphere
-                        ctx.fillStyle = this.color;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius*0.7, 0, Math.PI*2);
-                        ctx.fill();
-                        // Inner core
-                        ctx.fillStyle = '#fff';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius*0.3, 0, Math.PI*2);
-                        ctx.fill();
-                        break;
-                    }
-                    case 'SINGULARITY': {
-                        // Large, stable base
-                        ctx.fillStyle = '#212529';
-                        ctx.beginPath();
-                        for (let i = 0; i < 6; i++) {
-                            ctx.lineTo(radius * 1.3 * Math.cos(i * Math.PI / 3), radius * 1.3 * Math.sin(i * Math.PI / 3));
-                        }
-                        ctx.closePath();
-                        ctx.fill();
-                        ctx.stroke();
-                        // Containment rings
-                        ctx.strokeStyle = '#6f42c1'; // Purple energy
-                        ctx.lineWidth = 2;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-                        ctx.stroke();
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius * 0.7, 0, Math.PI * 2);
-                        ctx.stroke();
-                        // The singularity core
-                        ctx.fillStyle = this.color; // Black hole
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius*0.5, 0, Math.PI*2);
-                        ctx.fill();
-                        // Accretion disk/energy effect
-                        const grad = ctx.createRadialGradient(0, 0, radius*0.5, 0, 0, radius*1.1);
-                        grad.addColorStop(0, 'rgba(76, 5, 25, 0)');
-                        grad.addColorStop(0.8, this.color + 'aa');
-                        grad.addColorStop(1, 'rgba(255, 255, 255, 0.5)');
-                        ctx.fillStyle = grad;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius*1.1, 0, Math.PI*2);
-                        ctx.fill();
-                        break;
-                    }
-                    case 'CRYO_GENERATOR': {
-                        // Base platform
-                        ctx.fillStyle = '#6c757d';
-                        ctx.beginPath();
-                        for (let i = 0; i < 6; i++) {
-                            ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
-                        }
-                        ctx.closePath();
-                        ctx.fill();
-                        ctx.stroke();
-                        // Central cooling unit
-                        ctx.fillStyle = '#495057';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-                        // Emitter crystal
-                        ctx.fillStyle = this.color;
-                        ctx.beginPath();
-                        ctx.moveTo(0, -radius * 0.8);
-                        ctx.lineTo(radius * 0.7, 0);
-                        ctx.lineTo(0, radius * 0.8);
-                        ctx.lineTo(-radius * 0.7, 0);
-                        ctx.closePath();
-                        ctx.fill();
-                        ctx.stroke();
-                        // Frost effect
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius * 1.2, 0, Math.PI * 2);
-                        ctx.fill();
-                        break;
-                    }
-                    case 'ORBITAL_STRIKE': {
-                        // Base
-                        ctx.fillStyle = '#495057';
-                        ctx.beginPath();
-                        for (let i = 0; i < 6; i++) {
-                            ctx.lineTo(radius * 1.2 * Math.cos(i * Math.PI / 3), radius * 1.2 * Math.sin(i * Math.PI / 3));
-                        }
-                        ctx.closePath();
-                        ctx.fill();
-                        ctx.stroke();
-                        // Dish mount
-                        ctx.fillStyle = '#6c757d';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius*0.8, 0, Math.PI*2);
-                        ctx.fill();
-                        ctx.stroke();
-                        // Dish
-                        ctx.strokeStyle = this.color;
-                        ctx.lineWidth = 3;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius, -Math.PI/3, Math.PI/3);
-                        ctx.stroke();
-                        // Emitter
-                        ctx.fillStyle = '#fff';
-                        ctx.beginPath();
-                        ctx.arc(radius*0.7, 0, 4, 0, Math.PI*2);
-                        ctx.fill();
-                        break;
-                    }
-                    case 'GRENADE_LAUNCHER': {
-                        // --- НОВИЙ ДИЗАЙН: Револьверний Барабан ---
-                        // База-п'єдестал
-                        ctx.fillStyle = '#4a553a'; // військовий зелений
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-                        // Обертова частина
-                        ctx.fillStyle = '#6c757d';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius * 0.9, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-                        // Великий револьверний барабан
-                        ctx.fillStyle = this.color;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-                        // Камори в барабані
-                        ctx.fillStyle = '#212529';
-                        for (let i = 0; i < 6; i++) {
-                            const angle = i * (Math.PI / 3);
-                            ctx.beginPath();
-                            ctx.arc(radius * 0.5 * Math.cos(angle), radius * 0.5 * Math.sin(angle), radius * 0.15, 0, Math.PI * 2);
-                            ctx.fill();
-                        }
-                        // Короткий ствол
-                        ctx.fillStyle = '#212529';
-                        ctx.fillRect(radius * 0.8, -radius * 0.25, radius * 0.7, radius * 0.5);
-                        ctx.strokeRect(radius * 0.8, -radius * 0.25, radius * 0.7, radius * 0.5);
-                        // --- КІНЕЦЬ НОВОГО ДИЗАЙНУ ---
-                        break;
-                    }
-                    case 'ROCKET_LAUNCHER': {
-                        // --- НОВИЙ ДИЗАЙН: Одиночна пускова установка ---
-                        // Важка квадратна база
-                        ctx.fillStyle = '#343a40';
-                        ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
-                        ctx.strokeRect(-radius, -radius, radius * 2, radius * 2);
-                        // Обертова платформа
-                        ctx.fillStyle = '#6c757d';
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-                        
-                        // Механізм підйому (коробка)
-                        ctx.fillStyle = '#495057';
-                        ctx.fillRect(-radius * 0.5, -radius * 0.7, radius, radius * 1.4);
-                        ctx.strokeRect(-radius * 0.5, -radius * 0.7, radius, radius * 1.4);
-
-                        // Велика пускова труба (під кутом)
-                        ctx.save();
-                        ctx.rotate(-Math.PI / 6); // кут 30 градусів
-                        ctx.fillStyle = this.color;
-                        ctx.fillRect(0, -radius * 0.6, radius * 2.8, radius * 1.2);
-                        ctx.strokeRect(0, -radius * 0.6, radius * 2.8, radius * 1.2);
-                        
-                        // Кільця на трубі
-                        ctx.fillStyle = '#212529';
-                        ctx.fillRect(radius * 0.5, -radius * 0.7, 4, radius * 1.4);
-                        ctx.fillRect(radius * 1.8, -radius * 0.7, 4, radius * 1.4);
-
                         // Ракетна боєголовка (виглядає)
                         ctx.fillStyle = '#dc3545'; // Червона боєголовка
                         ctx.beginPath();
                         ctx.moveTo(radius * 2.8, 0); // Кінчик
-                        ctx.lineTo(radius * 2.5, -radius * 0.4);
-                        ctx.lineTo(radius * 2.5, radius * 0.4);
+                        ctx.lineTo(radius * 2.6, -radius * 0.3);
+                        ctx.lineTo(radius * 2.6, radius * 0.3);
                         ctx.closePath();
                         ctx.fill();
-                        ctx.stroke();
-
+                        
                         ctx.restore();
                         // --- КІНЕЦЬ НОВОГО ДИЗАЙНУ ---
                         break;
@@ -1752,6 +1478,59 @@
                         ctx.fill();
                         break;
                     }
+                    case 'CRYO_GENERATOR': {
+                        // --- НОВИЙ ДИЗАЙН: Кріо-Генератор ---
+                        
+                        // 1. Основа з "інеєм"
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 1.2, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // 2. Важка шестикутна база
+                        ctx.fillStyle = '#495057';
+                        ctx.strokeStyle = '#1a1a1a';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            ctx.lineTo(radius * 1.1 * Math.cos(i * Math.PI / 3), radius * 1.1 * Math.sin(i * Math.PI / 3));
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // 3. Три опорні вежі
+                        ctx.fillStyle = '#adb5bd'; // Світлий метал
+                        for (let i = 0; i < 3; i++) {
+                            const angle = i * (Math.PI * 2 / 3);
+                            ctx.save();
+                            ctx.rotate(angle);
+                            ctx.beginPath();
+                            ctx.moveTo(radius * 0.8, -radius * 0.2);
+                            ctx.lineTo(radius * 0.8, radius * 0.2);
+                            ctx.lineTo(radius * 0.5, radius * 0.3);
+                            ctx.lineTo(radius * 0.5, -radius * 0.3);
+                            ctx.closePath();
+                            ctx.fill();
+                            ctx.stroke();
+                            ctx.restore();
+                        }
+
+                        // 4. Пульсуюче ядро
+                        const pulse = 1 + Math.sin(Date.now() / 400) * 0.15;
+                        const gradPulse = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 0.7 * pulse);
+                        gradPulse.addColorStop(0, '#ffffff');
+                        gradPulse.addColorStop(0.7, this.color); // #a5f3fc
+                        gradPulse.addColorStop(1, 'rgba(165, 243, 252, 0.3)');
+                        
+                        ctx.fillStyle = gradPulse;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.7 * pulse, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // --- КІНЕЦЬ НОВОГО ДИЗАЙНУ ---
+                        break;
+                    }
                     case 'SPIKE_TRAP': {
                         // Новий дизайн "Капкан"
                         ctx.globalAlpha = this.currentCooldown > 0 ? 0.3 : 1.0;
@@ -1830,6 +1609,70 @@
                         ctx.fill();
                         break;
                     }
+                    case 'ALCHEMIST': {
+                        // Base
+                        ctx.arc(-radius*0.3, radius*0.2, 2, 0, Math.PI*2);
+                        ctx.fill();
+                        break;
+                    }
+                    case 'ORBITAL_STRIKE': {
+                        // --- НОВИЙ ДИЗАЙН: Командний центр "Орбіта" ---
+                        
+                        // 1. Важка кругла база (бункер)
+                        ctx.fillStyle = '#343a40';
+                        ctx.strokeStyle = '#1a1a1a';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        
+                        // Деталі на базі
+                        ctx.fillStyle = '#212529';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.9, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // 2. Опорна платформа для "тарілки"
+                        ctx.fillStyle = '#6c757d';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 0.5, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // 3. "Тарілка" (приймач)
+                        ctx.fillStyle = this.color; // #f59e0b
+                        ctx.strokeStyle = '#1a1a1a';
+                        ctx.lineWidth = 1;
+                        
+                        ctx.beginPath();
+                        ctx.arc(0, 0, radius * 1.2, -Math.PI * 0.2, -Math.PI * 0.8);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // 4. Центральний шпиль (антена)
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(-radius * 0.1, -radius * 1.5, radius * 0.2, radius * 1.2);
+                        ctx.strokeRect(-radius * 0.1, -radius * 1.5, radius * 0.2, radius * 1.2);
+                        // Сяйво на антені
+                        ctx.fillStyle = '#ffc107';
+                        ctx.beginPath();
+                        ctx.arc(0, -radius * 1.5, radius * 0.2, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // 5. Блімаючі вогні
+                        ctx.fillStyle = (Math.floor(Date.now() / 500) % 2 === 0) ? '#dc3545' : '#6c757d'; // Червоний
+                        ctx.beginPath();
+                        ctx.arc(radius * 0.8, 0, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        ctx.fillStyle = (Math.floor(Date.now() / 500) % 2 === 1) ? '#dc3545' : '#6c757d'; // Червоний (інвертований)
+                        ctx.beginPath();
+                        ctx.arc(-radius * 0.8, 0, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // --- КІНЕЦЬ НОВОГО ДИЗАЙНУ ---
+                        break;
+                    }
                     default: {
                         ctx.beginPath();
                         ctx.arc(0, 0, radius, 0, Math.PI * 2);
@@ -1848,9 +1691,9 @@
             }
 
             update() {
-                if (this.type === 'ROBOT_FACTORY') {
-                    return; // The factory itself doesn't do anything in update, its drones do.
-                }
+                if (isGameOver) return;
+
+                applyGlobalBuffsAndDebuffs();
 
                 if (this.type === 'SPIKE_TRAP') {
                     if (this.currentCooldown > 0) {
@@ -1953,20 +1796,9 @@
                     this.currentCooldown--;
                 } 
                 
-                /* --- BUGFIX: Видалено цей блок 'else', логіка перенесена нижче ---
-                else {
-                    if (this.type === 'FLAMETHROWER') {
-                        this.shootFlamethrower();
-                        this.currentCooldown = this.cooldown;
-                        return;
-                    }
-                    if (this.type === 'POISON_SPRAYER') {
-                        this.shootPoisonCone(); // Нова функція
-                        this.currentCooldown = this.cooldown;
-                        return;
-                    }
+                if (this.fireAnimationTimer > 0) { // <-- ДОДАНО: Зворотний відлік таймера анімації
+                    this.fireAnimationTimer--;
                 }
-                */
 
                 if (this.type === 'BALLISTA') {
                     const targets = this.findTargets(this.targets);
@@ -2003,6 +1835,7 @@
                         if (this.type === 'FLAMETHROWER') {
                             this.shootFlamethrower();
                             this.currentCooldown = this.cooldown * this.cooldownMultiplier;
+                            this.fireAnimationTimer = 10; // <-- ДОДАНО: Запустити анімацію на 10 кадрів
                         } else if (this.type === 'IRRADIATOR') {
                             this.shootRadiationCone();
                             this.currentCooldown = this.cooldown * this.cooldownMultiplier;
@@ -3137,93 +2970,28 @@
 
                     // Ствол
                     ctx.save();
-                    ctx.rotate(-Math.PI / 12);
+                    // ctx.rotate(-Math.PI / 3); // <-- ВИДАЛЕНО: Цей рядок спричиняв візуальну помилку
                     ctx.fillStyle = def.color;
-                    ctx.fillRect(radius*0.5, -radius * 0.3, radius * 2.5, radius * 0.6);
+                    ctx.fillRect(0, -radius * 0.5, radius * 1.8, radius * 1.0); // Зроблено коротшим і товщим
                     ctx.restore();
                     // --- КІНЕЦЬ НОВОГО ДИЗАЙНУ ІКОНКИ ---
                     break;
                 case 'SNIPER':
-                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
-                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillRect(0, -1, radius * 2.5, 2);
-                    break;
-                case 'TESLA':
-                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2); ctx.fill();
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-                    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(0, 0); const angle = Math.random() * Math.PI * 2; const dist = radius; ctx.lineTo(dist * Math.cos(angle), dist * Math.sin(angle)); ctx.stroke(); }
-                    break;
-                case 'SLOW':
-                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.moveTo(0, -radius); ctx.lineTo(radius*0.7, 0); ctx.lineTo(0, radius); ctx.lineTo(-radius*0.7, 0); ctx.closePath(); ctx.fill();
-                    break;
-                case 'FLAMETHROWER':
-                    // --- НОВИЙ ДИЗАЙН ІКОНКИ: Подвійні Баки ---
-                    ctx.fillStyle = '#495057';
+                    // --- ІКОНКА: Снайпер ---
+                    ctx.fillStyle = '#343a40'; // База
                     ctx.beginPath();
                     ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.fillStyle = '#343a40';
-                    ctx.fillRect(-radius * 0.5, -radius * 0.8, radius, radius * 1.6);
-                    ctx.fillStyle = def.color;
-                    ctx.fillRect(-radius, -radius * 0.7, radius * 0.5, radius * 1.4); // Лівий бак
-                    ctx.fillRect(radius * 0.5, -radius * 0.7, radius * 0.5, radius * 1.4); // Правий бак
-                    ctx.fillStyle = '#212529';
-                    ctx.fillRect(radius * 0.5, -radius * 0.3, radius * 1.5, radius * 0.6);
-                    // --- КІНЕЦЬ НОВОГО ДИЗАЙНУ ІКОНКИ ---
-                    break;
-                case 'ROCKET_LAUNCHER':
-                    // --- НОВИЙ ДИЗАЙН ІКОНКИ: ATGM ---
-                    // Тринога
-                    ctx.strokeStyle = '#343a40';
-                    ctx.lineWidth = 2;
-                    for (let i = 0; i < 3; i++) {
-                        const angle = i * (Math.PI * 2 / 3);
-                        ctx.beginPath();
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(radius * Math.cos(angle), radius * Math.sin(angle));
-                        ctx.stroke();
-                    }
-                    // Платформа
-                    ctx.fillStyle = '#495057';
-                    ctx.beginPath();
-                    ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
                     ctx.fill();
                     
-                    // Пускова коробка
-                    ctx.save();
-                    ctx.rotate(-Math.PI / 12);
-                    ctx.fillStyle = '#4a553a'; // Військово-зелений
-                    ctx.fillRect(0, -radius * 0.5, radius * 2.5, radius);
-                    // Блок оптики
-                    ctx.fillStyle = '#212529';
-                    ctx.fillRect(radius * 0.2, -radius, radius * 0.8, radius * 0.4);
-                    ctx.restore();
-                    // --- КІНЕЦЬ НОВОГО ДИЗАЙНУ ІКОНКИ ---
-                    break;
-                case 'GATLING':
-                    ctx.fillStyle = '#495057'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = def.color; ctx.beginPath(); ctx.arc(radius*0.5, 0, radius*0.8, -Math.PI/2, Math.PI/2); ctx.fill();
-                    for(let i = -1; i <= 1; i++){ if(i === 0) continue; const yOffset = i * 2; ctx.fillStyle = '#212529'; ctx.fillRect(radius * 0.5, yOffset - 0.5, radius * 1.2, 1); }
-                    break;
-                case 'MORTAR':
-                    ctx.fillStyle = '#343a40';
-                    ctx.beginPath();
-                    ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.fillStyle = '#6c757d';
-                    ctx.beginPath();
-                    ctx.arc(0, 0, radius * 0.9, 0, Math.PI*2);
-                    ctx.fill();
-                    ctx.save();
-                    ctx.rotate(-Math.PI / 3);
-                    ctx.fillStyle = def.color;
-                    ctx.fillRect(0, -radius*0.4, radius*2, radius*0.8);
-                    ctx.fillStyle = '#212529';
-                    ctx.fillRect(radius*0.5, -radius*0.5, 2, radius);
-                    ctx.fillRect(radius*1.2, -radius*0.5, 2, radius);
-                    ctx.restore();
+                    ctx.fillStyle = def.color; // Тіло
+                    ctx.fillRect(-radius * 0.7, -radius * 0.5, radius * 1.5, radius);
+                    
+                    ctx.fillStyle = '#6c757d'; // Ствол
+                    ctx.fillRect(0, -radius * 0.2, radius * 3, radius * 0.4);
+                    
+                    ctx.fillStyle = '#3b82f6'; // Оптика
+                    ctx.fillRect(radius * 0.5, -radius * 0.6, radius * 0.8, radius * 0.3);
+                    // --- КІНЕЦЬ ІКОНКИ ---
                     break;
                 case 'RAILGUN':
                     ctx.fillStyle = '#343a40'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
@@ -3278,6 +3046,31 @@
                     ctx.fill();
                     ctx.arc(0, 0, radius, -Math.PI/3, Math.PI/3); ctx.stroke();
                     break;
+                case 'CRYO_GENERATOR':
+                    // --- ІКОНКА: Кріо ---
+                    ctx.fillStyle = '#495057'; // База
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        ctx.lineTo(radius * 1.1 * Math.cos(i * Math.PI / 3), radius * 1.1 * Math.sin(i * Math.PI / 3));
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    ctx.fillStyle = '#adb5bd'; // Опори
+                    for (let i = 0; i < 3; i++) {
+                        const angle = i * (Math.PI * 2 / 3);
+                        ctx.save();
+                        ctx.rotate(angle);
+                        ctx.fillRect(radius * 0.5, -radius * 0.2, radius * 0.4, radius * 0.4);
+                        ctx.restore();
+                    }
+                    
+                    ctx.fillStyle = def.color; // Ядро
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                    // --- КІНЕЦЬ ІКОНКИ ---
+                    break;
                 case 'GRENADE_LAUNCHER':
                     // --- НОВИЙ ДИЗАЙН ІКОНКИ: Револьверний Барабан ---
                     ctx.fillStyle = '#4a553a';
@@ -3306,7 +3099,31 @@
                     break;
                 case 'CHRONO_BOOSTER':
                     ctx.fillStyle = '#dee2e6'; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.fill();
-                    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0, -radius*0.7); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(radius*0.5, 0); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(radius*0.5, 0); ctx.stroke();
+                    break;
+                case 'ORBITAL_STRIKE':
+                     // --- ІКОНКА: Орбіта ---
+                    ctx.fillStyle = '#343a40'; // База
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 1.1, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = def.color; // Тарілка
+                    ctx.strokeStyle = '#1a1a1a';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius * 1.1, -Math.PI * 0.2, -Math.PI * 0.8);
+                    ctx.fill();
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = '#ffffff'; // Антена
+                    ctx.fillRect(-radius * 0.15, -radius * 1.3, radius * 0.3, radius);
+                    
+                    ctx.fillStyle = '#ffc107'; // Сяйво
+                    ctx.beginPath();
+                    ctx.arc(0, -radius * 1.3, radius * 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                    // --- КІНЕЦЬ ІКОНКИ ---
                     break;
                 case 'BALLISTA': // Renamed to "Шипомет" icon
                         ctx.strokeRect(0, barrelYOffsetIcon - 1, radius * 2.2, 2);
@@ -3419,34 +3236,14 @@
                 mousePos.x = (e.clientX - rect.left) * scaleX;
                 mousePos.y = (e.clientY - rect.top) * scaleY;
             });
-            
-            canvas.addEventListener('mouseleave', () => {
-                mousePos.x = -1;
-                mousePos.y = -1;
-            });
+        } // <-- ДОДАНО ВИПРАВЛЕННЯ: Закриваюча дужка для initGame()
 
+        // Запуск гри
+        window.onload = () => {
+            initGame();
             gameLoop();
-            updateUI();
-        }
+        };
 
-        window.onload = initGame;
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
